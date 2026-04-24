@@ -104,7 +104,7 @@ function DualProgressBars({
       {/* Partner bar */}
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-semibold text-[--muted] w-[44px] shrink-0 truncate">{partnerName.split(" ")[0]}</span>
-        <ProgressBar count={partnerCount} target={target} color="var(--border)" />
+        <ProgressBar count={partnerCount} target={target} color="var(--muted)" />
         <span className="text-[10px] text-[--muted] w-[20px] text-right">{partnerCount}/{target}</span>
       </div>
     </div>

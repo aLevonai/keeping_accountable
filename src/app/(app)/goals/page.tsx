@@ -129,24 +129,20 @@ function GoalCard({ goal, userId, partnerId, partnerName }: {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-semibold text-[--muted] w-[44px] shrink-0 truncate">{partnerName.split(" ")[0]}</span>
-              <ProgressBar count={partnerCount} target={target} color="var(--border)" />
+              <ProgressBar count={partnerCount} target={target} color="var(--muted)" />
               <span className="text-[10px] text-[--muted] w-[20px] text-right">{partnerCount}/{target}</span>
             </div>
           </div>
         )
       )}
 
-      {!isShared && goal.cadence === "weekly" && (
-        <div className="flex items-center justify-between">
+      {!isShared && goal.cadence !== "once" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <ProgressBar count={count} target={target} color={done ? "var(--success)" : (isPartner ? "var(--muted)" : "var(--primary)")} />
+            <span className="text-[10px] text-[--muted] w-[20px] text-right">{count}/{target}</span>
+          </div>
           <WeekBar completions={goal.completions} userId={isOwn ? userId : partnerId} />
-          <span className="text-[10px] text-[--muted] ml-2">{count}/{target}</span>
-        </div>
-      )}
-
-      {!isShared && goal.cadence !== "weekly" && goal.cadence !== "once" && (
-        <div className="flex items-center gap-1.5">
-          <ProgressBar count={count} target={target} color={done ? "var(--success)" : (isPartner ? "var(--muted)" : "var(--primary)")} />
-          <span className="text-[10px] text-[--muted] w-[20px] text-right">{count}/{target}</span>
         </div>
       )}
     </div>
