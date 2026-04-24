@@ -1,6 +1,6 @@
 {
-  "name": "Together",
-  "short_name": "Together",
+  "name": "CheckMate",
+  "short_name": "CheckMate",
   "description": "Track your goals together",
   "start_url": "/home",
   "scope": "/",

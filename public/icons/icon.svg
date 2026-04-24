@@ -1,17 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  
-  <rect width="512" height="512" fill="#F8F4F0"></rect>
+  <!-- Solid terracotta background (visible on iOS home screen) -->
+  <rect width="512" height="512" fill="#C4704F"/>
 
-  
-  <rect x="232" y="243" width="90" height="26" rx="13" fill="#C4704F" opacity="0.13"></rect>
+  <!-- Left checkmark -->
+  <path d="M128 256 L156 288 L206 220" stroke="white" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-  
-  <circle cx="164" cy="256" r="88" fill="#C4704F"></circle>
-  
-  <path d="M128 256 L156 288 L206 220" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
-
-  
-  <circle cx="348" cy="256" r="88" fill="#C4704F" opacity="0.38"></circle>
-  
-  <path d="M312 256 L340 288 L390 220" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.9"></path>
+  <!-- Right checkmark (slightly faded — the "mate") -->
+  <path d="M306 256 L334 288 L384 220" stroke="white" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.55"/>
 </svg>

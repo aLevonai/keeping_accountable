@@ -97,13 +97,13 @@ function DualProgressBars({
     <div className="flex flex-col gap-1 mt-1.5">
       {/* You bar */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-semibold text-[--muted] w-[22px]">You</span>
+        <span className="text-[10px] font-semibold text-[--muted] w-[44px] shrink-0">You</span>
         <ProgressBar count={myCount} target={target} color={myDone ? "var(--success)" : "var(--primary)"} />
         <span className="text-[10px] text-[--muted] w-[20px] text-right">{myCount}/{target}</span>
       </div>
       {/* Partner bar */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-semibold text-[--muted] w-[22px] truncate">{partnerName.split(" ")[0]}</span>
+        <span className="text-[10px] font-semibold text-[--muted] w-[44px] shrink-0 truncate">{partnerName.split(" ")[0]}</span>
         <ProgressBar count={partnerCount} target={target} color="var(--border)" />
         <span className="text-[10px] text-[--muted] w-[20px] text-right">{partnerCount}/{target}</span>
       </div>

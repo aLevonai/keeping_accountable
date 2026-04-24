@@ -70,7 +70,7 @@ export default function WelcomePage() {
         <div className="flex flex-col items-center gap-3 mb-12">
           <AppLogo size={64} />
           <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] text-[--foreground] leading-none">
-            Together
+            CheckMate
           </h1>
           <p className="text-[14px] text-[--muted] text-center leading-relaxed">
             Set goals, prove them,<br />build memories — together.
@@ -97,7 +97,7 @@ export default function WelcomePage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold mt-1 disabled:opacity-60"
+              className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold mt-1 disabled:opacity-60"
             >
               {loading ? "Sending..." : "Continue"}
             </button>
@@ -137,7 +137,7 @@ export default function WelcomePage() {
               <button
                 type="submit"
                 disabled={loading || code.length < 6}
-                className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold disabled:opacity-60"
+                className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold disabled:opacity-60"
               >
                 {loading ? "Verifying..." : "Sign in"}
               </button>

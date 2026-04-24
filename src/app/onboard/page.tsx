@@ -133,7 +133,7 @@ export default function OnboardPage() {
             <button
               onClick={handleSaveName}
               disabled={!displayName.trim() || loading}
-              className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold disabled:opacity-60"
+              className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold disabled:opacity-60"
             >
               {loading ? "Saving..." : "Continue"}
             </button>
@@ -220,7 +220,7 @@ export default function OnboardPage() {
         <button
           onClick={handleJoinCouple}
           disabled={!inviteCode.trim() || loading}
-          className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold disabled:opacity-60"
+          className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold disabled:opacity-60"
         >
           {loading ? "Joining..." : "Join"}
         </button>
