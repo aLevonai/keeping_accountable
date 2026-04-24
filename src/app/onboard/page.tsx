@@ -5,10 +5,9 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AppLogo } from "@/components/ui/logo";
 
-type Step = "choose" | "create" | "join" | "name";
+type Step = "name" | "choose" | "create" | "join";
 
 function generateInviteCode() {
   const words = ["ROSE", "MOON", "LOVE", "STAR", "BLOOM", "SOUL", "BOND", "GLOW"];
@@ -114,22 +113,31 @@ export default function OnboardPage() {
 
   if (step === "name") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#fffaf7]">
-        <div className="w-full max-w-sm flex flex-col gap-6">
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-5xl">👋</div>
-            <h1 className="text-2xl font-bold text-stone-900">What should we call you?</h1>
-            <p className="text-stone-500 text-sm text-center">Your partner will see this name</p>
+      <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-[--background]">
+        <div className="w-full max-w-sm flex flex-col items-center gap-6">
+          <div className="flex flex-col items-center gap-3">
+            <AppLogo size={48} />
+            <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] text-center">
+              What should we call you?
+            </h1>
+            <p className="text-[13px] text-[--muted] text-center">Your partner will see this name</p>
           </div>
-          <Input
-            placeholder="Your name"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            autoFocus
-          />
-          <Button size="lg" onClick={handleSaveName} disabled={!displayName.trim() || loading}>
-            {loading ? "Saving..." : "Continue →"}
-          </Button>
+          <div className="w-full flex flex-col gap-3">
+            <input
+              placeholder="Your name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoFocus
+              className="w-full px-4 py-3.5 border border-[--border] rounded-2xl bg-[--surface] text-[15px] text-[--foreground] placeholder:text-[--muted] outline-none focus:border-[--primary]"
+            />
+            <button
+              onClick={handleSaveName}
+              disabled={!displayName.trim() || loading}
+              className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold disabled:opacity-60"
+            >
+              {loading ? "Saving..." : "Continue"}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -137,29 +145,28 @@ export default function OnboardPage() {
 
   if (step === "choose") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#fffaf7]">
+      <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-[--background]">
         <div className="w-full max-w-sm flex flex-col gap-4">
           <div className="flex flex-col items-center gap-2 mb-2">
-            <div className="text-5xl">💞</div>
-            <h1 className="text-2xl font-bold text-stone-900">Connect with your partner</h1>
+            <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] text-center">
+              Connect with your partner
+            </h1>
           </div>
-          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+          {error && <p className="text-[13px] text-red-500 text-center">{error}</p>}
           <button
             onClick={handleCreateCouple}
             disabled={loading}
-            className="flex flex-col gap-1 bg-white rounded-3xl p-5 border border-stone-100 shadow-sm text-left active:scale-95 transition-transform"
+            className="bg-[--surface] border border-[--border] rounded-2xl p-5 text-left active:scale-[0.98] transition-transform"
           >
-            <span className="text-2xl">✨</span>
-            <span className="font-bold text-stone-900">Start a couple</span>
-            <span className="text-sm text-stone-500">Get an invite code to share with your partner</span>
+            <p className="text-[15px] font-semibold text-[--foreground]">Start a couple</p>
+            <p className="text-[13px] text-[--muted] mt-1">Get an invite code to share with your partner</p>
           </button>
           <button
             onClick={() => setStep("join")}
-            className="flex flex-col gap-1 bg-white rounded-3xl p-5 border border-stone-100 shadow-sm text-left active:scale-95 transition-transform"
+            className="bg-[--surface] border border-[--border] rounded-2xl p-5 text-left active:scale-[0.98] transition-transform"
           >
-            <span className="text-2xl">🔗</span>
-            <span className="font-bold text-stone-900">Join with a code</span>
-            <span className="text-sm text-stone-500">Your partner already started — enter their code</span>
+            <p className="text-[15px] font-semibold text-[--foreground]">Join with a code</p>
+            <p className="text-[13px] text-[--muted] mt-1">Your partner already started — enter their code</p>
           </button>
         </div>
       </div>
@@ -168,21 +175,25 @@ export default function OnboardPage() {
 
   if (step === "create") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#fffaf7]">
+      <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-[--background]">
         <div className="w-full max-w-sm flex flex-col items-center gap-6">
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-5xl">🎉</div>
-            <h1 className="text-2xl font-bold text-stone-900">Your couple is ready!</h1>
-            <p className="text-stone-500 text-sm text-center">Share this code with your partner so they can join</p>
+          <div className="flex flex-col items-center gap-3">
+            <AppLogo size={48} />
+            <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] text-center">
+              Your couple is ready
+            </h1>
           </div>
-          <div className="bg-rose-50 border-2 border-dashed border-rose-200 rounded-3xl px-8 py-6 flex flex-col items-center gap-1">
-            <span className="text-xs text-rose-400 font-semibold uppercase tracking-widest">Invite Code</span>
-            <span className="text-4xl font-bold text-rose-600 tracking-widest">{generatedCode}</span>
+          <div className="w-full bg-[--primary-light] border-2 border-dashed border-[--primary]/40 rounded-2xl px-6 py-6 flex flex-col items-center gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[--primary]">Invite Code</span>
+            <span className="text-[30px] font-bold tracking-[0.14em] text-[--foreground]">{generatedCode}</span>
           </div>
-          <p className="text-stone-400 text-xs text-center">Code expires in 7 days</p>
-          <Button size="lg" onClick={() => router.push("/home")}>
-            I&apos;ll wait for them inside →
-          </Button>
+          <p className="text-[11px] text-[--muted]">Expires in 7 days</p>
+          <button
+            onClick={() => router.push("/home")}
+            className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold"
+          >
+            I&apos;ll wait for them inside
+          </button>
         </div>
       </div>
     );
@@ -190,26 +201,35 @@ export default function OnboardPage() {
 
   // join step
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#fffaf7]">
-      <div className="w-full max-w-sm flex flex-col gap-6">
-        <div className="flex flex-col items-center gap-2">
-          <div className="text-5xl">🔗</div>
-          <h1 className="text-2xl font-bold text-stone-900">Enter your invite code</h1>
-          <p className="text-stone-500 text-sm text-center">Ask your partner for their code</p>
+    <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-[--background]">
+      <div className="w-full max-w-sm flex flex-col gap-4">
+        <div className="flex flex-col items-center gap-2 mb-2">
+          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] text-center">
+            Enter the invite code
+          </h1>
         </div>
-        <Input
-          placeholder="ROSE-1234"
-          value={inviteCode}
-          onChange={(e) => setInviteCode(e.target.value)}
-          className="text-center text-xl font-bold tracking-widest uppercase"
-          error={error}
-        />
-        <Button size="lg" onClick={handleJoinCouple} disabled={!inviteCode.trim() || loading}>
-          {loading ? "Joining..." : "Join 💑"}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={() => setStep("choose")}>
+        <div>
+          <input
+            placeholder="ROSE-1234"
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value)}
+            className="w-full px-4 py-3.5 border border-[--border] rounded-2xl bg-[--surface] text-center text-[20px] font-bold tracking-[0.14em] uppercase text-[--foreground] placeholder:text-[--muted] placeholder:normal-case placeholder:tracking-normal outline-none focus:border-[--primary]"
+          />
+          {error && <p className="text-[13px] text-red-500 mt-1.5">{error}</p>}
+        </div>
+        <button
+          onClick={handleJoinCouple}
+          disabled={!inviteCode.trim() || loading}
+          className="w-full py-4 bg-[--primary] text-white rounded-2xl text-[15px] font-semibold disabled:opacity-60"
+        >
+          {loading ? "Joining..." : "Join"}
+        </button>
+        <button
+          onClick={() => setStep("choose")}
+          className="text-[13px] text-[--muted] text-center"
+        >
           ← Go back
-        </Button>
+        </button>
       </div>
     </div>
   );

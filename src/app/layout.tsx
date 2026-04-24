@@ -24,6 +24,10 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: "Together",
+    startupImage: [],
+  },
+  icons: {
+    apple: "/apple-touch-icon.png",
   },
 };
 

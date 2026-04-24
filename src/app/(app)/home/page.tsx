@@ -8,6 +8,7 @@ import { startOfWeek, addDays, isSameDay, isAfter } from "date-fns";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { HomeSkeleton } from "@/components/ui/page-skeleton";
 import { Check } from "lucide-react";
+import { AppLogo } from "@/components/ui/logo";
 
 // Mon–Sun labels
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -307,11 +308,14 @@ export default function HomePage() {
   return (
     <div className="pb-4">
       {/* Header */}
-      <div className="px-5 pt-4 pb-3">
-        <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[--muted]">{dateLabel}</p>
-        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground] leading-tight mt-0.5">
-          {coupleName}
-        </h1>
+      <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[--muted]">{dateLabel}</p>
+          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground] leading-tight mt-0.5">
+            {coupleName}
+          </h1>
+        </div>
+        <AppLogo size={38} />
       </div>
 
       {/* Partner split card */}
