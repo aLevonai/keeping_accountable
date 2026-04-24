@@ -167,6 +167,34 @@ export interface Database {
         };
         Update: Record<string, never>;
       };
+      dreams: {
+        Row: {
+          id: string;
+          couple_id: string;
+          owner_id: string | null;
+          title: string;
+          note: string | null;
+          emoji: string;
+          achieved_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          couple_id: string;
+          owner_id?: string | null;
+          title: string;
+          note?: string | null;
+          emoji?: string;
+          achieved_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          title?: string;
+          note?: string | null;
+          emoji?: string;
+          achieved_at?: string | null;
+        };
+      };
     };
   };
 }
@@ -177,6 +205,7 @@ export type CoupleRow = Database["public"]["Tables"]["couples"]["Row"];
 export type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 export type CompletionRow = Database["public"]["Tables"]["completions"]["Row"];
 export type CompletionMediaRow = Database["public"]["Tables"]["completion_media"]["Row"];
+export type DreamRow = Database["public"]["Tables"]["dreams"]["Row"];
 
 export type GoalWithCompletions = GoalRow & {
   completions: CompletionRow[];
