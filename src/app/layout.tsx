@@ -26,9 +26,6 @@ export const metadata: Metadata = {
     title: "CheckMate",
     startupImage: [],
   },
-  icons: {
-    apple: { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-  },
 };
 
 export const viewport: Viewport = {
@@ -46,6 +43,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${instrumentSerif.variable} ${dmSans.variable} h-full`}>
+      <head>
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+      </head>
       <body className="h-full bg-[--background] font-[family-name:var(--font-dm-sans)]">
         <Providers>{children}</Providers>
       </body>
