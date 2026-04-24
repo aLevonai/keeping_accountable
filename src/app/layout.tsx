@@ -26,9 +26,6 @@ export const metadata: Metadata = {
     title: "CheckMate",
     startupImage: [],
   },
-  icons: {
-    apple: "/apple-touch-icon.png",
-  },
 };
 
 export const viewport: Viewport = {
