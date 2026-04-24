@@ -42,25 +42,41 @@ export default function OnboardPage() {
 
   async function handleCreateCouple() {
     setLoading(true);
+    setError("");
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setError("Not signed in. Please go back and sign in again.");
+      setLoading(false);
+      return;
+    }
 
-    const { data: couple } = await supabase
+    const coupleId = crypto.randomUUID();
+    const { error: coupleError } = await supabase
       .from("couples")
-      .insert({})
-      .select()
-      .single();
+      .insert({ id: coupleId });
 
-    if (!couple) { setLoading(false); return; }
+    if (coupleError) {
+      setError(`Failed to create couple: ${coupleError.message}`);
+      setLoading(false);
+      return;
+    }
 
-    await supabase.from("couple_members").insert({ couple_id: couple.id, user_id: user.id });
+    const { error: memberError } = await supabase
+      .from("couple_members")
+      .insert({ couple_id: coupleId, user_id: user.id });
+
+    if (memberError) {
+      setError(`Failed to join couple: ${memberError.message}`);
+      setLoading(false);
+      return;
+    }
 
     const code = generateInviteCode();
     await supabase.from("couple_invites").insert({
-      couple_id: couple.id,
+      couple_id: coupleId,
       inviter_id: user.id,
       code,
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      expires_at: "2099-01-01T00:00:00Z",
     });
 
     setGeneratedCode(code);
@@ -127,6 +143,7 @@ export default function OnboardPage() {
             <div className="text-5xl">💞</div>
             <h1 className="text-2xl font-bold text-stone-900">Connect with your partner</h1>
           </div>
+          {error && <p className="text-sm text-red-500 text-center">{error}</p>}
           <button
             onClick={handleCreateCouple}
             disabled={loading}

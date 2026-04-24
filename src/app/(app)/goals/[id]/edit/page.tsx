@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
@@ -15,7 +15,8 @@ const CADENCES: { value: Cadence; label: string }[] = [
   { value: "once", label: "One-time" },
 ];
 
-export default function NewGoalPage() {
+export default function EditGoalPage() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
   const { couple } = useAppData();
@@ -27,25 +28,61 @@ export default function NewGoalPage() {
   const [isShared, setIsShared] = useState(false);
   const [isJoint, setIsJoint] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    supabase
+      .from("goals")
+      .select("*")
+      .eq("id", id)
+      .single()
+      .then(({ data }) => {
+        if (!data) { setNotFound(true); setFetching(false); return; }
+        setTitle(data.title);
+        setCadence(data.cadence);
+        setTarget(String(data.cadence_target));
+        setIsShared(data.owner_id === null);
+        setIsJoint(data.is_joint ?? false);
+        setFetching(false);
+      });
+  }, [id]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!couple || !user) return;
     setLoading(true);
 
-    await supabase.from("goals").insert({
-      couple_id: couple.id,
-      owner_id: isShared ? null : user.id,
-      is_joint: isShared ? isJoint : false,
-      title: title.trim(),
-      emoji: "🎯",
-      color: "#374151",
-      cadence,
-      cadence_target: cadence === "once" ? 1 : parseInt(target) || 1,
-      starts_on: new Date().toISOString().split("T")[0],
-    });
+    await supabase
+      .from("goals")
+      .update({
+        title: title.trim(),
+        cadence,
+        cadence_target: cadence === "once" ? 1 : parseInt(target) || 1,
+        owner_id: isShared ? null : user.id,
+        is_joint: isShared ? isJoint : false,
+      })
+      .eq("id", id);
 
-    router.push("/home");
+    router.push(`/goals/${id}`);
+  }
+
+  if (fetching) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-[--muted] text-sm">Loading...</p>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-3 px-6 text-center">
+        <p className="text-[--muted] text-sm">Goal not found.</p>
+        <button onClick={() => router.push("/goals")} className="text-sm text-[--primary] font-semibold underline">Back to goals</button>
+      </div>
+    );
   }
 
   return (
@@ -60,14 +97,13 @@ export default function NewGoalPage() {
         </button>
       </div>
 
-      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] mb-6">New Goal</h1>
+      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-[--foreground] mb-6">Edit Goal</h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <label className="text-[13px] font-medium text-[--foreground]">Title</label>
           <input
             className="border border-[--border] rounded-xl px-3.5 py-3 text-[14px] bg-[--surface] text-[--foreground] focus:outline-none focus:border-[--primary] focus:ring-1 focus:ring-[--primary] transition-colors"
-            placeholder="e.g. Work out 3 times a week"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
@@ -179,7 +215,7 @@ export default function NewGoalPage() {
           disabled={!title.trim() || loading}
           className="mt-2 bg-[--primary] text-[--foreground] font-semibold py-4 rounded-2xl text-[15px] disabled:opacity-40 active:scale-95 transition-transform border border-[#a05a3c] shadow-sm"
         >
-          {loading ? "Creating..." : "Create goal"}
+          {loading ? "Saving..." : "Save changes"}
         </button>
       </form>
     </div>

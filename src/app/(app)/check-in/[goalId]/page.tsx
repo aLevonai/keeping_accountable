@@ -1,24 +1,36 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useCouple } from "@/hooks/use-couple";
 import { uploadPhoto } from "@/utils/storage";
+import { ArrowLeft, Camera } from "lucide-react";
 
 export default function CheckInPage() {
   const { goalId } = useParams<{ goalId: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { couple } = useCouple(user?.id);
+  const { couple, self, partner } = useCouple(user?.id);
   const supabase = createClient();
 
   const [note, setNote] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [goalTitle, setGoalTitle] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!goalId) return;
+    supabase
+      .from("goals")
+      .select("title")
+      .eq("id", goalId)
+      .single()
+      .then(({ data }) => setGoalTitle(data?.title ?? null));
+  }, [goalId]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -64,29 +76,54 @@ export default function CheckInPage() {
       }
     }
 
+    // Notify partner (best-effort)
+    if (partner?.id && goalTitle) {
+      try {
+        await supabase.functions.invoke("send-push", {
+          body: {
+            target_user_id: partner.id,
+            title: "Together",
+            body: `${self?.display_name ?? "Your partner"} just checked in on "${goalTitle}"`,
+          },
+        });
+      } catch {
+        // Ignore notification errors
+      }
+    }
+
     router.push("/home");
   }
 
   return (
-    <div className="px-4 pt-12 pb-8 min-h-screen">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.back()} className="text-sm text-gray-500 underline">← Back</button>
-        <h1 className="text-lg font-bold text-gray-900">Check In</h1>
-      </div>
+    <div className="px-5 pt-14 pb-8 min-h-screen bg-[--background]">
+      {/* Back button */}
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-1 text-[14px] text-[--muted] mb-6 active:scale-95 transition-transform"
+      >
+        <ArrowLeft size={16} />
+        Back
+      </button>
+
+      {/* Eyebrow */}
+      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[--muted] mb-1">Logging</p>
+
+      {/* Goal title */}
+      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[22px] text-[--foreground] mb-6">
+        {goalTitle ?? "Goal"}
+      </h1>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        {/* Photo — optional */}
-        <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-gray-700">Photo <span className="text-gray-400 font-normal">(optional)</span></label>
-
+        {/* Photo upload area */}
+        <div>
           {preview ? (
-            <div className="relative">
+            <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-[--border]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Preview" className="w-full max-h-64 object-cover rounded border border-gray-200" />
+              <img src={preview} alt="Preview" className="w-full h-full object-cover" />
               <button
                 type="button"
                 onClick={() => { setPhoto(null); setPreview(null); }}
-                className="absolute top-2 right-2 bg-white border border-gray-300 rounded px-2 py-0.5 text-xs text-gray-600"
+                className="absolute top-3 right-3 bg-white/90 border border-[--border] rounded-lg px-3 py-1 text-[12px] text-[--muted] font-medium"
               >
                 Remove
               </button>
@@ -95,9 +132,10 @@ export default function CheckInPage() {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="border border-dashed border-gray-300 rounded px-4 py-6 text-sm text-gray-400 text-center hover:bg-gray-50"
+              className="w-full aspect-[4/3] rounded-2xl border-[1.5px] border-dashed border-[--border] bg-[--surface] flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-transform"
             >
-              Tap to add a photo
+              <Camera size={24} className="text-[--muted]" strokeWidth={1.5} />
+              <span className="text-[13px] text-[--muted]">Add a photo</span>
             </button>
           )}
 
@@ -111,22 +149,19 @@ export default function CheckInPage() {
           />
         </div>
 
-        {/* Note — optional */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700">Note <span className="text-gray-400 font-normal">(optional)</span></label>
-          <textarea
-            className="border border-gray-300 rounded px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-gray-400"
-            rows={3}
-            placeholder="How did it go?"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </div>
+        {/* Note */}
+        <textarea
+          className="w-full border border-[--border] rounded-xl p-3 text-[14px] bg-[--surface] text-[--foreground] placeholder:text-[--muted] resize-none focus:outline-none focus:border-[--primary] focus:ring-1 focus:ring-[--primary] transition-colors"
+          rows={3}
+          placeholder="How did it go?"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
 
         <button
           type="submit"
           disabled={loading}
-          className="bg-gray-900 text-white font-medium py-3 rounded text-sm disabled:opacity-40"
+          className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold border border-[#a05a3c] shadow-sm disabled:opacity-40 active:scale-95 transition-transform"
         >
           {loading ? "Saving..." : "Log check-in"}
         </button>

@@ -3,36 +3,65 @@
 export const dynamic = "force-dynamic";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function WelcomePage() {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const router = useRouter();
   const supabase = createClient();
 
-  async function handleSubmit(e: React.FormEvent) {
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "code">("email");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { shouldCreateUser: true },
     });
 
     if (error) {
       setError(error.message);
       setLoading(false);
     } else {
-      setSent(true);
+      setStep("code");
       setLoading(false);
     }
+  }
+
+  async function handleVerifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: code.trim(),
+      type: "email",
+    });
+
+    if (error || !data.user) {
+      setError("Invalid or expired code. Check your email or request a new one.");
+      setLoading(false);
+      return;
+    }
+
+    // Check if user has a couple
+    const { data: member } = await supabase
+      .from("couple_members")
+      .select("couple_id")
+      .eq("user_id", data.user.id)
+      .single();
+
+    router.push(member ? "/home" : "/onboard");
   }
 
   return (
@@ -47,23 +76,8 @@ export default function WelcomePage() {
           </p>
         </div>
 
-        {sent ? (
-          <div className="w-full flex flex-col items-center gap-4 bg-white rounded-3xl p-6 shadow-sm border border-stone-100">
-            <div className="text-4xl">📬</div>
-            <h2 className="text-xl font-bold text-stone-900">Check your email</h2>
-            <p className="text-stone-500 text-center text-sm">
-              We sent a magic link to <span className="font-semibold text-stone-700">{email}</span>. Tap it to sign in.
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSent(false)}
-            >
-              Use a different email
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="w-full flex flex-col gap-4">
+        {step === "email" ? (
+          <form onSubmit={handleSendCode} className="w-full flex flex-col gap-4">
             <Input
               label="Your email"
               type="email"
@@ -78,10 +92,42 @@ export default function WelcomePage() {
               {loading ? "Sending..." : "Continue with email ✨"}
             </Button>
           </form>
+        ) : (
+          <div className="w-full flex flex-col gap-4">
+            <div className="flex flex-col items-center gap-2 bg-white rounded-3xl p-6 shadow-sm border border-stone-100">
+              <div className="text-4xl">📬</div>
+              <h2 className="text-xl font-bold text-stone-900">Check your email</h2>
+              <p className="text-stone-500 text-center text-sm">
+                We sent an 8-digit code to <span className="font-semibold text-stone-700">{email}</span>
+              </p>
+            </div>
+            <form onSubmit={handleVerifyCode} className="flex flex-col gap-4">
+              <Input
+                label="8-digit code"
+                type="text"
+                inputMode="numeric"
+                placeholder="12345678"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                required
+                autoFocus
+                error={error}
+              />
+              <Button type="submit" size="lg" disabled={loading || code.length < 6}>
+                {loading ? "Verifying..." : "Sign in →"}
+              </Button>
+            </form>
+            <button
+              onClick={() => { setStep("email"); setCode(""); setError(""); }}
+              className="text-sm text-stone-400 underline text-center"
+            >
+              Use a different email
+            </button>
+          </div>
         )}
 
         <p className="text-xs text-stone-400 text-center">
-          We&apos;ll send you a magic link — no password needed.
+          No password needed — we&apos;ll email you a code.
         </p>
       </div>
     </div>

@@ -85,6 +85,7 @@ export interface Database {
           id: string;
           couple_id: string;
           owner_id: string | null;
+          is_joint: boolean;
           title: string;
           description: string | null;
           cadence: Cadence;
@@ -100,6 +101,7 @@ export interface Database {
           id?: string;
           couple_id: string;
           owner_id?: string | null;
+          is_joint?: boolean;
           title: string;
           description?: string | null;
           cadence: Cadence;
@@ -116,6 +118,7 @@ export interface Database {
           description?: string | null;
           cadence?: Cadence;
           cadence_target?: number;
+          is_joint?: boolean;
           emoji?: string;
           color?: string;
           ends_on?: string | null;
