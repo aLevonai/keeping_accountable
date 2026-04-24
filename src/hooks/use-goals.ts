@@ -37,11 +37,8 @@ export function useGoals(coupleId: string | null | undefined) {
 
     const channel = supabase
       .channel("goals-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "completions" },
-        () => load()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "goals" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "completions" }, () => load())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

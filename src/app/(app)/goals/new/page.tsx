@@ -18,7 +18,7 @@ const CADENCES: { value: Cadence; label: string }[] = [
 export default function NewGoalPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { couple } = useAppData();
+  const { couple, refetch } = useAppData();
   const supabase = createClient();
 
   const [title, setTitle] = useState("");
@@ -45,7 +45,8 @@ export default function NewGoalPage() {
       starts_on: new Date().toISOString().split("T")[0],
     });
 
-    router.push("/home");
+    refetch();
+    router.push("/goals");
   }
 
   return (
