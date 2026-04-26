@@ -9,6 +9,8 @@
   --border: #E8E0D8;
   --primary: #C4704F;
   --primary-light: #F5EAE4;
+  --partner-accent: #4A7A9B;
+  --partner-light: #E6F0F6;
   --success: #5A8A6A;
   --success-light: #E8F2EC;
   --nav-bg: rgba(248,244,240,0.94);
@@ -23,6 +25,8 @@
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-light: var(--primary-light);
+  --color-partner-accent: var(--partner-accent);
+  --color-partner-light: var(--partner-light);
   --color-success: var(--success);
   --color-success-light: var(--success-light);
   --font-instrument-serif: 'Instrument Serif', Georgia, serif;

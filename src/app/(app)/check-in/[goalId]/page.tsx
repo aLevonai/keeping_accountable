@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useCouple } from "@/hooks/use-couple";
 import { uploadPhoto } from "@/utils/storage";
-import { ArrowLeft, Camera } from "lucide-react";
+import { ArrowLeft, Camera, Check } from "lucide-react";
 
 export default function CheckInPage() {
   const { goalId } = useParams<{ goalId: string }>();
@@ -19,6 +19,7 @@ export default function CheckInPage() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [goalTitle, setGoalTitle] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -91,7 +92,25 @@ export default function CheckInPage() {
       }
     }
 
-    router.push("/home");
+    setSuccess(true);
+  }
+
+  if (success) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 bg-[--background]">
+        <div className="w-14 h-14 rounded-full bg-[--success-light] flex items-center justify-center">
+          <Check size={22} className="text-[--success]" />
+        </div>
+        <p className="font-[family-name:var(--font-instrument-serif)] italic text-[20px] text-[--foreground] text-center">Logged</p>
+        <p className="text-[14px] text-[--muted] text-center">{goalTitle}</p>
+        <button
+          onClick={() => router.push("/home")}
+          className="mt-2 text-[14px] text-[--primary]"
+        >
+          Back to home
+        </button>
+      </div>
+    );
   }
 
   return (

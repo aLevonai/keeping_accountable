@@ -117,7 +117,7 @@ export default function WelcomePage() {
         <div className="flex flex-col items-center gap-3 mb-12">
           <AppLogo size={64} />
           <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] text-[--foreground] leading-none">
-            CheckMate
+            Together
           </h1>
           <p className="text-[14px] text-[--muted] text-center leading-relaxed">
             Set goals, prove them,<br />build memories — together.

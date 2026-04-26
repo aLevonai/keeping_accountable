@@ -17,13 +17,13 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "CheckMate",
+  title: "Together",
   description: "Track your goals together",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "CheckMate",
+    title: "Together",
     startupImage: [],
   },
 };

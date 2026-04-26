@@ -8,6 +8,10 @@ import { useAppData } from "@/contexts/app-data";
 import { usePush } from "@/hooks/use-push";
 import { ChevronRight } from "lucide-react";
 
+function getPartnerInitial(name: string): string {
+  return name.trim().charAt(0).toUpperCase();
+}
+
 function getInitials(name: string): string {
   return name
     .split(" ")
@@ -132,8 +136,8 @@ export default function ProfilePage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[--muted] mb-1">Partner</p>
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-full bg-[--primary-light] flex items-center justify-center flex-shrink-0">
-                    <span className="text-[14px] font-semibold text-[--primary]">{getInitials(partnerName)}</span>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--partner-light)", border: "1.5px solid rgba(74,122,155,0.3)" }}>
+                    <span className="text-[14px] font-semibold" style={{ color: "var(--partner-accent)" }}>{getPartnerInitial(partnerName)}</span>
                   </div>
                   <div>
                     <p className="text-[15px] font-medium text-[--foreground]">{partnerName}</p>
@@ -256,20 +260,18 @@ export default function ProfilePage() {
             <button
               onClick={handleLeaveCouple}
               disabled={leaving}
-              className="w-full flex items-center justify-between px-4 py-3.5 text-[15px] text-[#C0392B] disabled:opacity-40 active:bg-[--surface-alt] transition-colors"
+              className="w-full px-4 py-3.5 text-[15px] text-[#C0392B] text-left disabled:opacity-40 active:bg-[--surface-alt] transition-colors"
             >
-              <span>{leaving ? "Leaving..." : "Leave couple"}</span>
-              <ChevronRight size={16} className="text-[#C0392B] opacity-60" />
+              {leaving ? "Leaving..." : "Leave couple"}
             </button>
             <div className="h-px bg-[--border]" />
           </>
         )}
         <button
           onClick={signOut}
-          className="w-full flex items-center justify-between px-4 py-3.5 text-[15px] text-[#C0392B] active:bg-[--surface-alt] transition-colors"
+          className="w-full px-4 py-3.5 text-[15px] text-[#C0392B] text-left active:bg-[--surface-alt] transition-colors"
         >
-          <span>Sign out</span>
-          <ChevronRight size={16} className="text-[#C0392B] opacity-60" />
+          Sign out
         </button>
       </div>
     </div>
