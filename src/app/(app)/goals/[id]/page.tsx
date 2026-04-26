@@ -74,7 +74,7 @@ export default function GoalDetailPage() {
       await supabase.functions.invoke("send-push", {
         body: {
           target_user_id: partner.id,
-          title: "Together",
+          title: "CheckMate",
           body: `Time to work on "${goal?.title}"! Your partner is rooting for you.`,
         },
       });
