@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { useDreams } from "@/hooks/use-dreams";
 import Link from "next/link";
-import { Plus, Check } from "lucide-react";
+import { Plus, Check, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
@@ -29,6 +29,7 @@ function DreamCard({
   const isShared = dream.owner_id === null;
   const isPartner = dream.owner_id === partnerId;
   const isAchieved = dream.achieved_at !== null;
+  const canEdit = dream.owner_id === null || dream.owner_id === userId;
 
   async function markAchieved() {
     await supabase
@@ -43,6 +44,12 @@ function DreamCard({
       .from("dreams")
       .update({ achieved_at: null })
       .eq("id", dream.id);
+    onUpdate();
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Delete this dream? This cannot be undone.")) return;
+    await supabase.from("dreams").delete().eq("id", dream.id);
     onUpdate();
   }
 
@@ -65,18 +72,36 @@ function DreamCard({
           </div>
         </div>
 
-        {isAchieved ? (
-          <div className="w-7 h-7 rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
-            <Check size={13} className="text-[--success]" />
-          </div>
-        ) : (
-          <button
-            onClick={markAchieved}
-            className="w-7 h-7 flex items-center justify-center border border-[--border] rounded-full bg-transparent text-[--muted] active:scale-95 transition-transform flex-shrink-0"
-          >
-            <Check size={13} />
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {canEdit && (
+            <>
+              <Link
+                href={`/dreams/${dream.id}/edit`}
+                className="w-7 h-7 flex items-center justify-center border border-[--border] rounded-full bg-transparent text-[--muted] active:scale-95 transition-transform"
+              >
+                <Pencil size={12} />
+              </Link>
+              <button
+                onClick={handleDelete}
+                className="w-7 h-7 flex items-center justify-center border border-[--border] rounded-full bg-transparent text-red-400 active:scale-95 transition-transform"
+              >
+                <Trash2 size={12} />
+              </button>
+            </>
+          )}
+          {isAchieved ? (
+            <div className="w-7 h-7 rounded-full bg-[--success-light] flex items-center justify-center">
+              <Check size={13} className="text-[--success]" />
+            </div>
+          ) : (
+            <button
+              onClick={markAchieved}
+              className="w-7 h-7 flex items-center justify-center border border-[--border] rounded-full bg-transparent text-[--muted] active:scale-95 transition-transform"
+            >
+              <Check size={13} />
+            </button>
+          )}
+        </div>
       </div>
 
       {isAchieved && (

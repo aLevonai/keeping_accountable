@@ -165,7 +165,7 @@ export interface Database {
           height?: number | null;
           created_at?: string;
         };
-        Update: Record<string, never>;
+        Update: { storage_path?: string; };
       };
       dreams: {
         Row: {

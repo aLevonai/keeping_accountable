@@ -143,8 +143,7 @@ export default function CheckInPage() {
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
-            className="hidden"
+              className="hidden"
             onChange={handleFileChange}
           />
         </div>

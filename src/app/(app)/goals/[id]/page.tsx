@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useCouple } from "@/hooks/use-couple";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { countCompletionsInPeriod, getPeriodLabel, calculateStreak } from "@/utils/period";
-import { getPhotoUrl } from "@/utils/storage";
+import { getPhotoUrl, uploadPhoto } from "@/utils/storage";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Camera, Pencil } from "lucide-react";
+import { ArrowLeft, Camera, Pencil, ImagePlus } from "lucide-react";
 import { GoalDetailSkeleton } from "@/components/ui/page-skeleton";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -21,18 +21,22 @@ interface CompletionWithMedia {
   note: string | null;
   completed_at: string;
   created_at: string;
-  completion_media: { storage_path: string }[];
+  completion_media: { id: string; storage_path: string }[];
 }
 
 export default function GoalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { partner } = useCouple(user?.id);
+  const { partner, couple } = useCouple(user?.id);
   const supabase = createClient();
   const [goal, setGoal] = useState<GoalWithCompletions | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [nudgeSent, setNudgeSent] = useState(false);
+  const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const pendingMediaId = useRef<string | null>(null);
+  const pendingCompletionId = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -70,7 +74,7 @@ export default function GoalDetailPage() {
       await supabase.functions.invoke("send-push", {
         body: {
           target_user_id: partner.id,
-          title: "Together",
+          title: "CheckMate",
           body: `Time to work on "${goal?.title}"! Your partner is rooting for you.`,
         },
       });
@@ -78,6 +82,48 @@ export default function GoalDetailPage() {
       // Silently fail — nudge is best-effort
     }
     setTimeout(() => setNudgeSent(false), 3000);
+  }
+
+  async function handleArchive() {
+    await supabase
+      .from("goals")
+      .update({ archived_at: new Date().toISOString() })
+      .eq("id", goal!.id);
+    router.push("/goals");
+  }
+
+  async function handleDelete() {
+    if (!window.confirm("Permanently delete this goal and all its check-ins? This cannot be undone.")) return;
+    await supabase.from("goals").delete().eq("id", goal!.id);
+    router.push("/goals");
+  }
+
+  function openChangePhoto(mediaId: string, completionId: string) {
+    pendingMediaId.current = mediaId;
+    pendingCompletionId.current = completionId;
+    photoInputRef.current?.click();
+  }
+
+  async function handleChangePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !pendingMediaId.current || !pendingCompletionId.current || !user || !couple) return;
+    setChangingPhotoId(pendingMediaId.current);
+    try {
+      const newPath = await uploadPhoto(file, couple.id, user.id, pendingCompletionId.current);
+      await supabase
+        .from("completion_media")
+        .update({ storage_path: newPath })
+        .eq("id", pendingMediaId.current);
+      await load();
+    } catch {
+      // Upload failed — keep existing photo
+    } finally {
+      setChangingPhotoId(null);
+      pendingMediaId.current = null;
+      pendingCompletionId.current = null;
+      // Reset input so same file can be re-selected
+      e.target.value = "";
+    }
   }
 
   if (notFound) {
@@ -105,14 +151,6 @@ export default function GoalDetailPage() {
   const canNudge = partner && (goal.owner_id === partner.id || goal.owner_id === null);
   const sortedCompletions = (goal.completions as CompletionWithMedia[]).slice().reverse();
 
-  async function handleArchive() {
-    await supabase
-      .from("goals")
-      .update({ archived_at: new Date().toISOString() })
-      .eq("id", goal!.id);
-    router.push("/goals");
-  }
-
   const ownerLabel = goal.owner_id === null
     ? "Shared goal"
     : goal.owner_id === user?.id
@@ -121,6 +159,15 @@ export default function GoalDetailPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[--background]">
+      {/* Hidden file input for changing photo */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleChangePhoto}
+      />
+
       {/* Header */}
       <div className="px-5 pt-14 pb-4 bg-[--surface] border-b border-[--border]">
         <div className="flex items-center justify-between mb-4">
@@ -199,13 +246,35 @@ export default function GoalDetailPage() {
           <div className="flex flex-col gap-3">
             {sortedCompletions.map((c) => (
               <div key={c.id} className="bg-[--surface] rounded-2xl border border-[--border] overflow-hidden">
-                {c.completion_media?.[0] && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={getPhotoUrl(c.completion_media[0].storage_path)}
-                    alt="Check-in photo"
-                    className="w-full aspect-video object-cover"
-                  />
+                {c.completion_media?.[0] ? (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={getPhotoUrl(c.completion_media[0].storage_path)}
+                      alt="Check-in photo"
+                      className={`w-full aspect-video object-cover transition-opacity ${changingPhotoId === c.completion_media[0].id ? "opacity-40" : ""}`}
+                    />
+                    {c.user_id === user?.id && (
+                      <button
+                        onClick={() => openChangePhoto(c.completion_media[0].id, c.id)}
+                        disabled={!!changingPhotoId}
+                        className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-[11px] font-medium px-2 py-1 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
+                      >
+                        <ImagePlus size={12} />
+                        Change
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  c.user_id === user?.id && (
+                    <button
+                      onClick={() => openChangePhoto("", c.id)}
+                      className="w-full py-3 flex items-center justify-center gap-1.5 text-[12px] text-[--muted] border-b border-[--border] active:bg-[--surface-alt] transition-colors"
+                    >
+                      <ImagePlus size={14} />
+                      Add photo
+                    </button>
+                  )
                 )}
                 <div className="px-3 py-2 flex items-center justify-between">
                   {c.note && <p className="text-sm text-[--foreground]">{c.note}</p>}
@@ -219,11 +288,14 @@ export default function GoalDetailPage() {
         )}
       </div>
 
-      {/* Archive */}
+      {/* Archive + Delete */}
       {isOwnerOrShared && (
-        <div className="px-5 pb-8 mt-auto">
+        <div className="px-5 pb-8 mt-auto flex flex-col gap-1">
           <Button variant="ghost" size="sm" onClick={handleArchive} className="text-[--muted] text-xs">
             Archive this goal
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleDelete} className="text-red-400 text-xs">
+            Delete this goal
           </Button>
         </div>
       )}
