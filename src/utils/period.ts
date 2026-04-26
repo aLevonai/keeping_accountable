@@ -5,8 +5,8 @@ export function getPeriodRange(cadence: Cadence, date = new Date()): { start: Da
   switch (cadence) {
     case "weekly":
       return {
-        start: startOfWeek(date, { weekStartsOn: 1 }),
-        end: endOfWeek(date, { weekStartsOn: 1 }),
+        start: startOfWeek(date, { weekStartsOn: 0 }),
+        end: endOfWeek(date, { weekStartsOn: 0 }),
       };
     case "monthly":
       return { start: startOfMonth(date), end: endOfMonth(date) };

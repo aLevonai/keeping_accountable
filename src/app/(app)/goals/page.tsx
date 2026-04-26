@@ -14,7 +14,7 @@ import { GoalsSkeleton } from "@/components/ui/page-skeleton";
 
 type Filter = "all" | "mine" | "shared" | "partner";
 
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"]; // Sun–Sat
 
 const CADENCE_META: Record<string, { color: string; dot: string; label: string }> = {
   weekly:  { color: "#3D7060", dot: "#4A9078", label: "Weekly" },
@@ -58,7 +58,7 @@ function WeekBar({ completions, userId, color }: {
   userId?: string;
   color: string;
 }) {
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
   const today = new Date();
   const filtered = userId ? completions.filter(c => c.user_id === userId) : completions;
   return (
