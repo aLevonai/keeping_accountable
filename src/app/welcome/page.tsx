@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AppLogo } from "@/components/ui/logo";
@@ -17,6 +17,45 @@ export default function WelcomePage() {
   const [step, setStep] = useState<"email" | "code">("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [restoring, setRestoring] = useState(true);
+
+  // On mount: attempt to silently restore a session from localStorage backup.
+  // This handles the iOS PWA case where cookies are cleared between app launches
+  // but a valid refresh token still exists in localStorage.
+  useEffect(() => {
+    async function tryRestore() {
+      // Already have a cookie session — middleware would have redirected but
+      // check again in case of a race condition.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace("/home");
+        return;
+      }
+
+      // No cookie session — try the localStorage backup.
+      try {
+        const raw = localStorage.getItem("sb-checkmate-backup");
+        if (raw) {
+          const { access_token, refresh_token } = JSON.parse(raw);
+          const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+          if (!error) {
+            router.replace("/home");
+            return;
+          }
+          // Tokens expired — discard the stale backup.
+          localStorage.removeItem("sb-checkmate-backup");
+        }
+      } catch {
+        // Malformed backup — ignore and show sign-in form.
+        localStorage.removeItem("sb-checkmate-backup");
+      }
+
+      setRestoring(false);
+    }
+
+    tryRestore();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
@@ -61,6 +100,14 @@ export default function WelcomePage() {
       .single();
 
     router.push(member ? "/home" : "/onboard");
+  }
+
+  if (restoring) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[--background]">
+        <div className="animate-pulse"><AppLogo size={48} /></div>
+      </div>
+    );
   }
 
   return (
