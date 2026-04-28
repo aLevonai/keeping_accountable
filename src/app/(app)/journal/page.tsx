@@ -17,10 +17,45 @@ interface JournalEntry {
   completion_media: { storage_path: string }[];
 }
 
-const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6];
+const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
+// Alternating aspect ratios: square, wide, tall, wide, square, tall…
+const ASPECTS = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
+// Subtle gradient backgrounds for entries without photos
+const GRAD_BG = [
+  "linear-gradient(135deg, #f5e6d8 0%, #e8d5c4 100%)",
+  "linear-gradient(135deg, #dce8f0 0%, #c8dce8 100%)",
+  "linear-gradient(135deg, #e8e4f0 0%, #d8d2e8 100%)",
+  "linear-gradient(135deg, #d8ece0 0%, #c8e0d0 100%)",
+  "linear-gradient(135deg, #f0ece0 0%, #e4dcc8 100%)",
+  "linear-gradient(135deg, #ece0e8 0%, #dcc8d8 100%)",
+];
+
+function TapeStrip({ angle = 0 }: { angle?: number }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: -8,
+        left: "50%",
+        transform: `translateX(-50%) rotate(${angle}deg)`,
+        width: 44,
+        height: 18,
+        background: "rgba(255,230,180,0.55)",
+        borderRadius: 2,
+        zIndex: 2,
+        backdropFilter: "blur(0px)",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+      }}
+    />
+  );
+}
 
 function PolaroidCard({ entry, index }: { entry: JournalEntry; index: number }) {
   const rotation = ROTATIONS[index % ROTATIONS.length];
+  const aspectClass = ASPECTS[index % ASPECTS.length];
+  const gradBg = GRAD_BG[index % GRAD_BG.length];
+  const tapeAngle = (index % 3 === 0) ? -4 : (index % 3 === 1) ? 3 : -2;
+
   const photo = entry.completion_media?.[0];
   const name = entry.users?.display_name ?? "Someone";
   const dayLabel = format(new Date(entry.completed_at), "EEE");
@@ -28,14 +63,16 @@ function PolaroidCard({ entry, index }: { entry: JournalEntry; index: number }) 
 
   return (
     <div
-      className="bg-white rounded-sm p-2 pb-6"
+      className="relative bg-white rounded-sm p-2 pb-7"
       style={{
-        boxShadow: "0 2px 8px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.06)",
+        boxShadow: "0 3px 12px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)",
         transform: `rotate(${rotation}deg)`,
       }}
     >
+      <TapeStrip angle={tapeAngle} />
+
       {/* Photo area */}
-      <div className="w-full aspect-square overflow-hidden bg-[--surface-alt]">
+      <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -44,8 +81,11 @@ function PolaroidCard({ entry, index }: { entry: JournalEntry; index: number }) 
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <div className="w-8 h-8 rounded-full bg-[--border]" />
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ background: gradBg }}
+          >
+            <div className="w-8 h-8 rounded-full bg-white/30" />
           </div>
         )}
       </div>
@@ -97,7 +137,6 @@ export default function JournalPage() {
     ? format(new Date(entries[0].completed_at), "MMMM yyyy")
     : format(new Date(), "MMMM yyyy");
 
-  // Split into two columns
   const leftEntries = entries.filter((_, i) => i % 2 === 0);
   const rightEntries = entries.filter((_, i) => i % 2 !== 0);
 
@@ -114,15 +153,15 @@ export default function JournalPage() {
           No check-ins yet. Complete a goal to see it here.
         </div>
       ) : (
-        <div className="flex gap-2.5 px-4">
+        <div className="flex gap-2.5 px-4 pt-3">
           {/* Left column */}
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 flex flex-col gap-5">
             {leftEntries.map((entry, i) => (
               <PolaroidCard key={entry.id} entry={entry} index={i * 2} />
             ))}
           </div>
           {/* Right column (offset) */}
-          <div className="flex-1 flex flex-col gap-4 pt-6">
+          <div className="flex-1 flex flex-col gap-5 pt-8">
             {rightEntries.map((entry, i) => (
               <PolaroidCard key={entry.id} entry={entry} index={i * 2 + 1} />
             ))}

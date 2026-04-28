@@ -21,16 +21,20 @@ export default function CheckInPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [goalTitle, setGoalTitle] = useState<string | null>(null);
+  const [goalColor, setGoalColor] = useState<string>("#C4704F");
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!goalId) return;
     supabase
       .from("goals")
-      .select("title")
+      .select("title, color")
       .eq("id", goalId)
       .single()
-      .then(({ data }) => setGoalTitle(data?.title ?? null));
+      .then(({ data }) => {
+        setGoalTitle(data?.title ?? null);
+        if (data?.color) setGoalColor(data.color);
+      });
   }, [goalId]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -45,7 +49,6 @@ export default function CheckInPage() {
     if (!user || !couple) return;
     setLoading(true);
 
-    // Insert completion
     const { data: completion, error } = await supabase
       .from("completions")
       .insert({
@@ -63,7 +66,6 @@ export default function CheckInPage() {
       return;
     }
 
-    // Upload photo if selected
     if (photo) {
       try {
         const path = await uploadPhoto(photo, couple.id, user.id, completion.id);
@@ -73,17 +75,16 @@ export default function CheckInPage() {
           media_type: "photo",
         });
       } catch {
-        // Photo upload failed but completion was saved — don't block navigation
+        // Photo upload failed but completion was saved
       }
     }
 
-    // Notify partner (best-effort)
     if (partner?.id && goalTitle) {
       try {
         await supabase.functions.invoke("send-push", {
           body: {
             target_user_id: partner.id,
-            title: "Together",
+            title: "CheckMate",
             body: `${self?.display_name ?? "Your partner"} just checked in on "${goalTitle}"`,
           },
         });
@@ -98,16 +99,22 @@ export default function CheckInPage() {
   if (success) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 bg-[--background]">
-        <div className="w-14 h-14 rounded-full bg-[--success-light] flex items-center justify-center">
-          <Check size={22} className="text-[--success]" />
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ background: goalColor + "25" }}
+        >
+          <Check size={22} style={{ color: goalColor }} />
         </div>
-        <p className="font-[family-name:var(--font-instrument-serif)] italic text-[20px] text-[--foreground] text-center">Logged</p>
+        <p className="font-[family-name:var(--font-instrument-serif)] italic text-[20px] text-[--foreground] text-center">
+          Logged
+        </p>
         <p className="text-[14px] text-[--muted] text-center">{goalTitle}</p>
         <button
-          onClick={() => router.push("/home")}
-          className="mt-2 text-[14px] text-[--primary]"
+          onClick={() => router.push("/goals")}
+          className="mt-2 text-[14px]"
+          style={{ color: goalColor }}
         >
-          Back to home
+          ← Back to goals
         </button>
       </div>
     );
@@ -124,13 +131,24 @@ export default function CheckInPage() {
         Back
       </button>
 
-      {/* Eyebrow */}
-      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[--muted] mb-1">Logging</p>
-
-      {/* Goal title */}
-      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[22px] text-[--foreground] mb-6">
-        {goalTitle ?? "Goal"}
-      </h1>
+      {/* Goal header with color chip */}
+      <div className="flex items-center gap-3 mb-6">
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 10,
+            background: goalColor,
+            flexShrink: 0,
+          }}
+        />
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[--muted]">Logging</p>
+          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[22px] text-[--foreground] leading-tight">
+            {goalTitle ?? "Goal"}
+          </h1>
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Photo upload area */}
@@ -162,14 +180,25 @@ export default function CheckInPage() {
             ref={fileRef}
             type="file"
             accept="image/*"
-              className="hidden"
+            className="hidden"
             onChange={handleFileChange}
           />
         </div>
 
         {/* Note */}
         <textarea
-          className="w-full border border-[--border] rounded-xl p-3 text-[14px] bg-[--surface] text-[--foreground] placeholder:text-[--muted] resize-none focus:outline-none focus:border-[--primary] focus:ring-1 focus:ring-[--primary] transition-colors"
+          className="w-full border border-[--border] rounded-xl p-3 text-[14px] bg-[--surface] text-[--foreground] placeholder:text-[--muted] resize-none focus:outline-none transition-colors"
+          style={{
+            "--tw-ring-color": goalColor,
+          } as React.CSSProperties}
+          onFocus={e => {
+            e.currentTarget.style.borderColor = goalColor;
+            e.currentTarget.style.boxShadow = `0 0 0 1px ${goalColor}60`;
+          }}
+          onBlur={e => {
+            e.currentTarget.style.borderColor = "";
+            e.currentTarget.style.boxShadow = "";
+          }}
           rows={3}
           placeholder="How did it go?"
           value={note}
@@ -179,7 +208,12 @@ export default function CheckInPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-4 bg-[--primary] text-[--foreground] rounded-2xl text-[15px] font-semibold border border-[#a05a3c] shadow-sm disabled:opacity-40 active:scale-95 transition-transform"
+          className="w-full py-4 rounded-2xl text-[15px] font-semibold shadow-sm disabled:opacity-40 active:scale-95 transition-transform"
+          style={{
+            background: goalColor,
+            color: "white",
+            border: `1px solid ${goalColor}cc`,
+          }}
         >
           {loading ? "Saving..." : "Log check-in"}
         </button>

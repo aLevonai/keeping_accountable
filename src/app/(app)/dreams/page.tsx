@@ -12,17 +12,31 @@ import type { DreamRow } from "@/types/database";
 
 type StatusFilter = "active" | "achieved";
 
+function SectionDivider({ label, count }: { label: string; count?: number }) {
+  return (
+    <div className="flex items-center gap-2 mt-5 mb-2.5">
+      <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-[--muted] whitespace-nowrap">
+        {label}
+      </span>
+      {count != null && (
+        <span className="text-[9px] font-semibold text-[--muted] bg-[--border] rounded-full px-1.5 py-px">
+          {count}
+        </span>
+      )}
+      <div className="flex-1 h-px bg-[--border]" />
+    </div>
+  );
+}
+
 function DreamCard({
   dream,
   userId,
   partnerId,
-  partnerName,
   onUpdate,
 }: {
   dream: DreamRow;
   userId: string;
   partnerId: string;
-  partnerName: string;
   onUpdate: () => void;
 }) {
   const supabase = createClient();
@@ -30,6 +44,13 @@ function DreamCard({
   const isPartner = dream.owner_id === partnerId;
   const isAchieved = dream.achieved_at !== null;
   const canEdit = dream.owner_id === null || dream.owner_id === userId;
+
+  // Color dot: shared = primary accent, partner = partner accent, mine = muted
+  const dotColor = isShared
+    ? "var(--primary)"
+    : isPartner
+    ? "var(--partner-accent)"
+    : "var(--muted)";
 
   async function markAchieved() {
     await supabase
@@ -54,18 +75,24 @@ function DreamCard({
   }
 
   return (
-    <div className="bg-[--surface] rounded-2xl border border-[--border] p-3.5 flex flex-col gap-2">
+    <div
+      className="bg-[--surface] rounded-2xl border border-[--border] p-3.5 flex flex-col gap-2"
+      style={{ opacity: isAchieved ? 0.65 : 1 }}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 flex-1 min-w-0">
-          <span className="text-[20px] leading-none mt-0.5 flex-shrink-0">{dream.emoji}</span>
+          {/* Color dot */}
+          <div
+            className="flex-shrink-0 mt-[5px]"
+            style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor }}
+          />
           <div className="flex-1 min-w-0">
-            <h3 className="text-[15px] font-medium text-[--foreground]">{dream.title}</h3>
-            {isShared && (
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[--primary]">Shared</span>
-            )}
-            {isPartner && (
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[--muted]">Partner</span>
-            )}
+            <h3
+              className="text-[15px] font-medium text-[--foreground]"
+              style={{ textDecoration: isAchieved ? "line-through" : "none", opacity: isAchieved ? 0.7 : 1 }}
+            >
+              {dream.title}
+            </h3>
             {dream.note && (
               <p className="text-[12px] text-[--muted] mt-0.5 line-clamp-2">{dream.note}</p>
             )}
@@ -73,7 +100,7 @@ function DreamCard({
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {canEdit && (
+          {canEdit && !isAchieved && (
             <>
               <Link
                 href={`/dreams/${dream.id}/edit`}
@@ -107,7 +134,7 @@ function DreamCard({
       {isAchieved && (
         <button
           onClick={markOpen}
-          className="self-start text-[11px] text-[--muted] underline underline-offset-2 active:opacity-60 transition-opacity"
+          className="self-start text-[11px] text-[--muted] underline underline-offset-2 active:opacity-60 transition-opacity ml-[22px]"
         >
           Mark as open
         </button>
@@ -146,39 +173,52 @@ export default function DreamsPage() {
     );
   }
 
+  const partnerFirstName = partner?.display_name.split(" ")[0] ?? "Partner";
+
   const filtered = dreams.filter((d) =>
     filter === "active" ? d.achieved_at === null : d.achieved_at !== null
   );
+
+  const sharedDreams = filtered.filter(d => d.owner_id === null);
+  const myDreams = filtered.filter(d => d.owner_id === user!.id);
+  const partnerDreams = filtered.filter(d => d.owner_id === partner?.id);
 
   const filters: { key: StatusFilter; label: string }[] = [
     { key: "active", label: "Active" },
     { key: "achieved", label: "Achieved" },
   ];
 
+  const commonProps = {
+    userId: user!.id,
+    partnerId: partner?.id ?? "",
+    onUpdate: refetch,
+  };
+
   return (
-    <div className="flex flex-col px-5 pt-14 gap-4 pb-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col px-4 pt-14 pb-4">
+      <div className="flex items-center justify-between px-1 mb-0">
         <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground]">
           Dreams
         </h1>
         <Link
           href="/dreams/new"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-[--foreground] active:scale-95 transition-transform duration-150"
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-white active:scale-95 transition-transform duration-150"
         >
           <Plus size={18} />
         </Link>
       </div>
 
-      <div className="flex gap-1.5">
+      {/* Status filter */}
+      <div className="flex gap-1.5 py-3 px-1">
         {filters.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setFilter(key)}
             className={cn(
-              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors duration-150",
+              "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors duration-150 border",
               filter === key
-                ? "bg-[--primary] text-[--foreground] border border-[--primary]"
-                : "bg-transparent text-[--muted] border border-[--border]"
+                ? "bg-[--primary] text-white border-[--primary]"
+                : "bg-transparent text-[--muted] border-[--border]"
             )}
           >
             {label}
@@ -198,17 +238,42 @@ export default function DreamsPage() {
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtered.map((d) => (
-            <DreamCard
-              key={d.id}
-              dream={d}
-              userId={user!.id}
-              partnerId={partner?.id ?? ""}
-              partnerName={partner?.display_name ?? "Partner"}
-              onUpdate={refetch}
-            />
-          ))}
+        <div>
+          {/* Together */}
+          {sharedDreams.length > 0 && (
+            <>
+              <SectionDivider label="Together" count={sharedDreams.length} />
+              <div className="flex flex-col gap-2">
+                {sharedDreams.map(d => (
+                  <DreamCard key={d.id} dream={d} {...commonProps} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Yours */}
+          {myDreams.length > 0 && (
+            <>
+              <SectionDivider label="Yours" count={myDreams.length} />
+              <div className="flex flex-col gap-2">
+                {myDreams.map(d => (
+                  <DreamCard key={d.id} dream={d} {...commonProps} />
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Partner's */}
+          {partnerDreams.length > 0 && (
+            <>
+              <SectionDivider label={`${partnerFirstName}'s`} count={partnerDreams.length} />
+              <div className="flex flex-col gap-2">
+                {partnerDreams.map(d => (
+                  <DreamCard key={d.id} dream={d} {...commonProps} />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
