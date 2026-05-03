@@ -7,7 +7,7 @@ import { useDreams } from "@/hooks/use-dreams";
 import { countCompletionsInPeriod, getPeriodRange } from "@/utils/period";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { HomeSkeleton } from "@/components/ui/page-skeleton";
-import { Check } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { AppLogo } from "@/components/ui/logo";
 
 function getInitial(name: string): string {
@@ -227,7 +227,15 @@ export default function HomePage() {
             CheckMate
           </h1>
         </div>
-        <AppLogo size={38} />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/goals/new"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-white active:scale-95 transition-transform duration-150"
+          >
+            <Plus size={18} />
+          </Link>
+          <AppLogo size={38} />
+        </div>
       </div>
 
       {/* Score card */}

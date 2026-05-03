@@ -202,9 +202,10 @@ export default function DreamsPage() {
         </h1>
         <Link
           href="/dreams/new"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-white active:scale-95 transition-transform duration-150"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[--primary] text-white text-[13px] font-semibold active:scale-95 transition-transform duration-150"
         >
-          <Plus size={18} />
+          <Plus size={14} />
+          Add dream
         </Link>
       </div>
 

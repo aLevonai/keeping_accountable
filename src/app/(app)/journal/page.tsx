@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useCouple } from "@/hooks/use-couple";
 import { getPhotoUrl } from "@/utils/storage";
 import { format } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
+import { Trash2, ImageOff } from "lucide-react";
 
 interface JournalEntry {
   id: string;
+  user_id: string;
   note: string | null;
   completed_at: string;
   goals: { title: string } | null;
   users: { display_name: string } | null;
-  completion_media: { storage_path: string }[];
+  completion_media: { id: string; storage_path: string }[];
 }
 
 const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
-// Alternating aspect ratios: square, wide, tall, wide, square, tall…
 const ASPECTS = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
-// Subtle gradient backgrounds for entries without photos
 const GRAD_BG = [
   "linear-gradient(135deg, #f5e6d8 0%, #e8d5c4 100%)",
   "linear-gradient(135deg, #dce8f0 0%, #c8dce8 100%)",
@@ -43,14 +43,71 @@ function TapeStrip({ angle = 0 }: { angle?: number }) {
         background: "rgba(255,230,180,0.55)",
         borderRadius: 2,
         zIndex: 2,
-        backdropFilter: "blur(0px)",
         boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
       }}
     />
   );
 }
 
-function PolaroidCard({ entry, index }: { entry: JournalEntry; index: number }) {
+function DeleteMenu({
+  hasPhoto,
+  onRemovePhoto,
+  onDeleteEntry,
+  onClose,
+}: {
+  hasPhoto: boolean;
+  onRemovePhoto: () => void;
+  onDeleteEntry: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40"
+        onClick={onClose}
+      />
+      {/* Menu */}
+      <div
+        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-white rounded-xl shadow-lg border border-[--border] overflow-hidden"
+        style={{ minWidth: 160 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {hasPhoto && (
+          <button
+            onClick={onRemovePhoto}
+            className="flex items-center gap-2.5 w-full px-4 py-3 text-[13px] text-[--foreground] hover:bg-[--surface] transition-colors border-b border-[--border]"
+          >
+            <ImageOff size={14} className="text-[--muted]" />
+            Remove photo
+          </button>
+        )}
+        <button
+          onClick={onDeleteEntry}
+          className="flex items-center gap-2.5 w-full px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 size={14} />
+          Delete check-in
+        </button>
+      </div>
+    </>
+  );
+}
+
+function PolaroidCard({
+  entry,
+  index,
+  isOwn,
+  onRemovePhoto,
+  onDeleteEntry,
+}: {
+  entry: JournalEntry;
+  index: number;
+  isOwn: boolean;
+  onRemovePhoto: (entry: JournalEntry) => void;
+  onDeleteEntry: (entry: JournalEntry) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const rotation = ROTATIONS[index % ROTATIONS.length];
   const aspectClass = ASPECTS[index % ASPECTS.length];
   const gradBg = GRAD_BG[index % GRAD_BG.length];
@@ -100,6 +157,27 @@ function PolaroidCard({ entry, index }: { entry: JournalEntry; index: number }) 
           <p className="text-[10px] italic text-[#777] mt-1 line-clamp-2">&ldquo;{entry.note}&rdquo;</p>
         )}
       </div>
+
+      {/* Delete button — only for own entries */}
+      {isOwn && (
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            className="absolute bottom-0 right-0.5 w-6 h-6 flex items-center justify-center rounded-full bg-white/80 text-[#bbb] hover:text-[#888] transition-colors"
+            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
+          >
+            <Trash2 size={11} />
+          </button>
+          {menuOpen && (
+            <DeleteMenu
+              hasPhoto={!!photo}
+              onRemovePhoto={() => { setMenuOpen(false); onRemovePhoto(entry); }}
+              onDeleteEntry={() => { setMenuOpen(false); onDeleteEntry(entry); }}
+              onClose={() => setMenuOpen(false)}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -111,23 +189,35 @@ export default function JournalPage() {
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!couple) return;
+    const { data } = await supabase
+      .from("completions")
+      .select("id, user_id, note, completed_at, goals!inner(title, couple_id), users(display_name), completion_media(id, storage_path)")
+      .eq("goals.couple_id", couple.id)
+      .order("completed_at", { ascending: false })
+      .limit(100);
 
-    async function load() {
-      const { data } = await supabase
-        .from("completions")
-        .select("id, note, completed_at, goals!inner(title, couple_id), users(display_name), completion_media(storage_path)")
-        .eq("goals.couple_id", couple!.id)
-        .order("completed_at", { ascending: false })
-        .limit(100);
-
-      setEntries((data ?? []) as unknown as JournalEntry[]);
-      setLoading(false);
-    }
-
-    load();
+    setEntries((data ?? []) as unknown as JournalEntry[]);
+    setLoading(false);
   }, [couple?.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleRemovePhoto(entry: JournalEntry) {
+    const media = entry.completion_media?.[0];
+    if (!media) return;
+    await supabase.from("completion_media").delete().eq("id", media.id);
+    load();
+  }
+
+  async function handleDeleteEntry(entry: JournalEntry) {
+    if (!window.confirm("Delete this check-in? This cannot be undone.")) return;
+    await supabase.from("completions").delete().eq("id", entry.id);
+    load();
+  }
 
   if (loading) {
     return <JournalSkeleton />;
@@ -157,13 +247,27 @@ export default function JournalPage() {
           {/* Left column */}
           <div className="flex-1 flex flex-col gap-5">
             {leftEntries.map((entry, i) => (
-              <PolaroidCard key={entry.id} entry={entry} index={i * 2} />
+              <PolaroidCard
+                key={entry.id}
+                entry={entry}
+                index={i * 2}
+                isOwn={entry.user_id === user?.id}
+                onRemovePhoto={handleRemovePhoto}
+                onDeleteEntry={handleDeleteEntry}
+              />
             ))}
           </div>
           {/* Right column (offset) */}
           <div className="flex-1 flex flex-col gap-5 pt-8">
             {rightEntries.map((entry, i) => (
-              <PolaroidCard key={entry.id} entry={entry} index={i * 2 + 1} />
+              <PolaroidCard
+                key={entry.id}
+                entry={entry}
+                index={i * 2 + 1}
+                isOwn={entry.user_id === user?.id}
+                onRemovePhoto={handleRemovePhoto}
+                onDeleteEntry={handleDeleteEntry}
+              />
             ))}
           </div>
         </div>
