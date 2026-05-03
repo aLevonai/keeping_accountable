@@ -202,7 +202,7 @@ export default function DreamsPage() {
         </h1>
         <Link
           href="/dreams/new"
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[--primary] text-white text-[13px] font-semibold active:scale-95 transition-transform duration-150"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-primary text-white text-[13px] font-semibold active:scale-95 transition-transform duration-150"
         >
           <Plus size={14} />
           Add dream
@@ -218,7 +218,7 @@ export default function DreamsPage() {
             className={cn(
               "flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-medium transition-colors duration-150 border",
               filter === key
-                ? "bg-[--primary] text-white border-[--primary]"
+                ? "bg-primary text-white border-primary"
                 : "bg-transparent text-[--muted] border-[--border]"
             )}
           >

@@ -260,7 +260,7 @@ export default function GoalsPage() {
         <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground]">Goals</h1>
         <Link
           href="/goals/new"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-white active:scale-95 transition-transform duration-150"
+          className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white active:scale-95 transition-transform duration-150"
         >
           <Plus size={18} />
         </Link>
