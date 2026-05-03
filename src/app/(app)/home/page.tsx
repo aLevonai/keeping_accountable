@@ -230,7 +230,7 @@ export default function HomePage() {
         <div className="flex items-center gap-2">
           <Link
             href="/goals/new"
-            className="flex items-center justify-center w-9 h-9 rounded-full bg-[--primary] text-white active:scale-95 transition-transform duration-150"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white active:scale-95 transition-transform duration-150"
           >
             <Plus size={18} />
           </Link>
