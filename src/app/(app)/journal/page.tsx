@@ -30,6 +30,10 @@ const GRAD_BG = [
   "linear-gradient(135deg, #ece0e8 0%, #dcc8d8 100%)",
 ];
 
+function isRTL(text: string): boolean {
+  return /[֐-׿؀-ۿ]/.test(text[0] ?? "");
+}
+
 function TapeStrip({ angle = 0 }: { angle?: number }) {
   return (
     <div
@@ -154,7 +158,10 @@ function PolaroidCard({
         </p>
         <p className="text-[10px] text-[#999] mt-0.5 truncate">{goalTitle}</p>
         {entry.note && (
-          <p className="text-[10px] italic text-[#777] mt-1 line-clamp-2">&ldquo;{entry.note}&rdquo;</p>
+          <p
+            className="text-[10px] italic text-[#777] mt-1 line-clamp-2"
+            dir={isRTL(entry.note) ? "rtl" : "ltr"}
+          >&ldquo;{entry.note}&rdquo;</p>
         )}
       </div>
 
