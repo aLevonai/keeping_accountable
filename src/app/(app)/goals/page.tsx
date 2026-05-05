@@ -30,7 +30,7 @@ function Dots({ count, target, color, size = 6 }: {
             height: size,
             borderRadius: "50%",
             background: i < count ? color : "transparent",
-            border: `1.5px solid ${i < count ? color : color + "55"}`,
+            border: `1.5px solid ${i < count ? color : "var(--border)"}`,
             flexShrink: 0,
           }}
         />
