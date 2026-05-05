@@ -205,17 +205,16 @@ export default function HomePage() {
   const partnerInitial = getInitial(partner?.display_name ?? "P");
   const partnerFirstName = partner?.display_name.split(" ")[0] ?? "Partner";
 
-  // "Up next for you" — not done, my goals + shared goals, max 3
-  const upNext = myGoals
-    .filter(g => !isDoneForMe(g))
-    .slice(0, 3);
+  // "Up next for you" — not done first, then done, my goals + shared goals
+  const upNext = [
+    ...myGoals.filter(g => !isDoneForMe(g)),
+    ...myGoals.filter(g => isDoneForMe(g)),
+  ];
 
-  // Partner activity — partner's goals + shared, sorted by most recent completion this period, max 3
-  const partnerActivity = partnerGoals
-    .filter(g => g.owner_id === partner?.id)
-    .slice(0, 3);
+  // Partner activity — partner's goals + shared
+  const partnerActivity = partnerGoals.filter(g => g.owner_id === partner?.id);
 
-  const sharedDreams = dreams.filter(d => d.owner_id === null && d.achieved_at === null).slice(0, 3);
+  const sharedDreams = dreams.filter(d => d.owner_id === null && d.achieved_at === null);
 
   return (
     <div className="pb-4">
@@ -254,7 +253,7 @@ export default function HomePage() {
       {upNext.length > 0 && (
         <div className="mx-4 mb-3 bg-[--surface] rounded-2xl border border-[--border] px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[--muted] mb-1">
-            Up next for you
+            Your goals
           </p>
           <div>
             {upNext.map(g => (
@@ -266,11 +265,6 @@ export default function HomePage() {
               />
             ))}
           </div>
-          {myGoals.filter(g => !isDoneForMe(g)).length > 3 && (
-            <Link href="/goals" className="block text-[12px] text-[--primary] font-medium mt-2">
-              View all goals →
-            </Link>
-          )}
         </div>
       )}
 

@@ -168,7 +168,7 @@ function GoalCardFocus({
       </div>
 
       {/* Progress dots */}
-      {goal.cadence !== "once" && !done && (
+      {goal.cadence !== "once" && (
         isShared && !goal.is_joint ? (
           <div className="flex flex-col gap-1.5 pl-[19px]">
             <div className="flex items-center gap-1.5">
