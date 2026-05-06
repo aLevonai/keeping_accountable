@@ -122,21 +122,24 @@ function UpNextRow({ goal, userId, partnerId }: {
           {isShared && " · Shared"}
         </p>
       </div>
-      {myDone ? (
-        <div className="w-[26px] h-[26px] rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
-          <Check size={11} className="text-[--success]" />
-        </div>
-      ) : (
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {myDone && (
+          <div className="w-[20px] h-[20px] rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
+            <Check size={9} className="text-[--success]" />
+          </div>
+        )}
         <Link
           href={`/check-in/${goal.id}`}
-          className="w-[26px] h-[26px] flex items-center justify-center rounded-full font-semibold text-[16px] leading-none active:scale-95 transition-transform flex-shrink-0"
+          className="flex items-center justify-center rounded-full font-semibold text-[16px] leading-none active:scale-95 transition-transform flex-shrink-0"
           style={{
-            background: chipColor + "20",
-            border: `1px solid ${chipColor}50`,
-            color: chipColor,
+            width: 26,
+            height: 26,
+            background: myDone ? "transparent" : chipColor + "20",
+            border: myDone ? "1.5px dashed var(--border)" : `1px solid ${chipColor}50`,
+            color: myDone ? "var(--muted)" : chipColor,
           }}
         >+</Link>
-      )}
+      </div>
     </div>
   );
 }

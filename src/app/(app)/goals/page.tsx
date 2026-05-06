@@ -35,7 +35,7 @@ function Dots({ count, target, color, size = 6 }: {
           }}
         />
       ))}
-      {target > 8 && (
+      {(target > 8 || count > target) && (
         <span style={{ color, fontSize: 9, marginLeft: 2 }}>{count}/{target}</span>
       )}
     </div>
@@ -89,7 +89,6 @@ function GoalCardFocus({
 
   const count = countCompletionsInPeriod(goal.completions, goal.cadence);
   const target = goal.cadence_target;
-  const done = isDone || (goal.cadence === "once" ? count >= 1 : count >= target);
 
   const myCount = isShared
     ? countCompletionsInPeriod(goal.completions.filter(c => c.user_id === userId), goal.cadence)
@@ -100,9 +99,18 @@ function GoalCardFocus({
   const myDone = myCount >= target;
   const partnerDone = partnerCount >= target;
 
-  const canCheckIn = !done && (isShared
-    ? (goal.is_joint ? !done : !myDone)
-    : !isPartner && !done);
+  // For non-joint shared: only "done" when BOTH people have hit their individual target
+  const overallDone = goal.cadence === "once"
+    ? (isShared && !goal.is_joint ? myCount >= 1 && partnerCount >= 1 : count >= 1)
+    : (isShared && !goal.is_joint ? myDone && partnerDone : count >= target);
+  const done = isDone || overallDone;
+
+  // Whether the current user has personally met their target
+  const isUserDone = isShared && !goal.is_joint ? myDone : overallDone;
+
+  // User can check in (not a partner-only goal) — always true for own/shared goals, enables extras
+  const canCheckIn = !isPartner;
+  const isExtra = canCheckIn && (isDone || isUserDone);
 
   const chipColor = goal.color ?? "#374151";
   const cadenceLabel = CADENCE_LABEL[goal.cadence] ?? goal.cadence;
@@ -149,21 +157,30 @@ function GoalCardFocus({
           </div>
         </div>
 
-        {done ? (
+        {canCheckIn ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {isUserDone && !isDone && (
+              <div className="w-[20px] h-[20px] rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
+                <Check size={9} className="text-[--success]" />
+              </div>
+            )}
+            <Link
+              href={`/check-in/${goal.id}`}
+              onClick={e => e.stopPropagation()}
+              className="flex items-center justify-center rounded-full font-semibold text-[18px] leading-none active:scale-95 transition-transform flex-shrink-0"
+              style={{
+                width: 26,
+                height: 26,
+                background: isExtra ? "transparent" : chipColor + "25",
+                border: isExtra ? "1.5px dashed var(--border)" : `1px solid ${chipColor}55`,
+                color: isExtra ? "var(--muted)" : chipColor,
+              }}
+            >+</Link>
+          </div>
+        ) : done ? (
           <div className="w-[26px] h-[26px] rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
             <Check size={12} className="text-[--success]" />
           </div>
-        ) : canCheckIn ? (
-          <Link
-            href={`/check-in/${goal.id}`}
-            onClick={e => e.stopPropagation()}
-            className="w-[26px] h-[26px] flex items-center justify-center rounded-full font-semibold text-[18px] leading-none active:scale-95 transition-transform flex-shrink-0"
-            style={{
-              background: chipColor + "25",
-              border: `1px solid ${chipColor}55`,
-              color: chipColor,
-            }}
-          >+</Link>
         ) : null}
       </div>
 
@@ -227,7 +244,16 @@ export default function GoalsPage() {
   const sharedGoals = goals.filter(g => g.owner_id === null);
   const partnerGoals = goals.filter(g => g.owner_id === partner?.id);
 
-  const isDoneGoal = (g: GoalWithCompletions) => {
+  const isDoneGoal = (g: GoalWithCompletions): boolean => {
+    if (g.owner_id === null && !g.is_joint) {
+      const myC = countCompletionsInPeriod(g.completions.filter(c => c.user_id === user!.id), g.cadence);
+      const partnerC = partner
+        ? countCompletionsInPeriod(g.completions.filter(c => c.user_id === partner.id), g.cadence)
+        : 0;
+      return g.cadence === "once"
+        ? myC >= 1 && partnerC >= 1
+        : myC >= g.cadence_target && partnerC >= g.cadence_target;
+    }
     const count = countCompletionsInPeriod(g.completions, g.cadence);
     return g.cadence === "once" ? count >= 1 : count >= g.cadence_target;
   };

@@ -141,8 +141,16 @@ export default function GoalDetailPage() {
     return <GoalDetailSkeleton />;
   }
 
-  const count = countCompletionsInPeriod(goal.completions, goal.cadence);
+  const totalCount = countCompletionsInPeriod(goal.completions, goal.cadence);
   const target = goal.cadence_target;
+  const isSharedNonJoint = goal.owner_id === null && !goal.is_joint;
+  // For non-joint shared goals each person tracks independently against the target
+  const count = isSharedNonJoint
+    ? countCompletionsInPeriod(goal.completions.filter(c => c.user_id === user?.id), goal.cadence)
+    : totalCount;
+  const partnerDetailCount = isSharedNonJoint && partner
+    ? countCompletionsInPeriod(goal.completions.filter(c => c.user_id === partner.id), goal.cadence)
+    : null;
   const progress = target > 0 ? Math.min(count / target, 1) * 100 : 0;
   const done = count >= target;
   const periodLabel = getPeriodLabel(goal.cadence);
@@ -199,7 +207,9 @@ export default function GoalDetailPage() {
         {goal.cadence !== "once" && (
           <div className="mt-4 bg-[--surface-alt] rounded-2xl px-4 py-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[13px] font-medium text-[--foreground]">{count} of {target} {periodLabel}</span>
+              <span className="text-[13px] font-medium text-[--foreground]">
+                {isSharedNonJoint ? "You: " : ""}{count} of {target} {periodLabel}
+              </span>
               <span className="text-[13px] text-[--muted]">{done ? "Goal reached" : `${target - count} to go`}</span>
             </div>
             <div className="h-[4px] rounded-full bg-[--border] overflow-hidden">
@@ -208,6 +218,27 @@ export default function GoalDetailPage() {
                 style={{ width: `${progress}%`, backgroundColor: done ? "var(--success)" : "var(--primary)" }}
               />
             </div>
+            {partnerDetailCount !== null && (
+              <>
+                <div className="flex items-center justify-between mt-3 mb-1">
+                  <span className="text-[13px] font-medium text-[--foreground]">
+                    {partner?.display_name.split(" ")[0]}: {partnerDetailCount} of {target} {periodLabel}
+                  </span>
+                  <span className="text-[13px] text-[--muted]">
+                    {partnerDetailCount >= target ? "Goal reached" : `${target - partnerDetailCount} to go`}
+                  </span>
+                </div>
+                <div className="h-[4px] rounded-full bg-[--border] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-300 ease-out"
+                    style={{
+                      width: `${Math.min(partnerDetailCount / target, 1) * 100}%`,
+                      backgroundColor: partnerDetailCount >= target ? "var(--success)" : "var(--partner-accent)",
+                    }}
+                  />
+                </div>
+              </>
+            )}
             {streak >= 2 && (
               <p className="text-[11px] text-[--muted] mt-2">{streak} {goal.cadence === "weekly" ? "week" : goal.cadence === "monthly" ? "month" : "period"} streak</p>
             )}
