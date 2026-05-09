@@ -6,7 +6,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type Cadence = "weekly" | "monthly" | "yearly" | "once";
+export type Cadence = "daily" | "weekly" | "monthly" | "yearly" | "once";
 export type MediaType = "photo" | "video";
 
 export interface Database {
@@ -167,6 +167,37 @@ export interface Database {
         };
         Update: { storage_path?: string; };
       };
+      goal_reminders: {
+        Row: {
+          id: string;
+          goal_id: string;
+          user_id: string;
+          enabled: boolean;
+          hour: number;
+          minute: number;
+          day_of_week: number | null;
+          timezone: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          goal_id: string;
+          user_id: string;
+          enabled?: boolean;
+          hour: number;
+          minute?: number;
+          day_of_week?: number | null;
+          timezone?: string;
+          created_at?: string;
+        };
+        Update: {
+          enabled?: boolean;
+          hour?: number;
+          minute?: number;
+          day_of_week?: number | null;
+          timezone?: string;
+        };
+      };
       dreams: {
         Row: {
           id: string;
@@ -206,6 +237,7 @@ export type GoalRow = Database["public"]["Tables"]["goals"]["Row"];
 export type CompletionRow = Database["public"]["Tables"]["completions"]["Row"];
 export type CompletionMediaRow = Database["public"]["Tables"]["completion_media"]["Row"];
 export type DreamRow = Database["public"]["Tables"]["dreams"]["Row"];
+export type GoalReminderRow = Database["public"]["Tables"]["goal_reminders"]["Row"];
 
 export type GoalWithCompletions = GoalRow & {
   completions: CompletionRow[];

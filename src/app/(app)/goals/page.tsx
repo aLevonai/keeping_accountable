@@ -59,6 +59,7 @@ function SectionDivider({ label, count }: { label: string; count?: number }) {
 }
 
 const CADENCE_LABEL: Record<string, string> = {
+  daily: "daily",
   weekly: "weekly",
   monthly: "monthly",
   yearly: "yearly",
@@ -233,7 +234,7 @@ function GoalCardFocus({
             className="text-[10px] font-semibold uppercase tracking-[0.06em]"
             style={{ color: done ? "var(--success)" : chipColor }}
           >
-            {streak} {goal.cadence === "weekly" ? "week" : goal.cadence === "monthly" ? "month" : "year"} streak
+            {streak} {goal.cadence === "daily" ? "day" : goal.cadence === "weekly" ? "week" : goal.cadence === "monthly" ? "month" : "year"} streak
           </span>
         </div>
       )}

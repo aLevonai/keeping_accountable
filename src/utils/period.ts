@@ -1,4 +1,4 @@
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import type { Cadence } from "@/types/database";
 
 export interface PeriodRecord {
@@ -11,6 +11,8 @@ export interface PeriodRecord {
 
 export function getPeriodRange(cadence: Cadence, date = new Date()): { start: Date; end: Date } | null {
   switch (cadence) {
+    case "daily":
+      return { start: startOfDay(date), end: endOfDay(date) };
     case "weekly":
       return {
         start: startOfWeek(date, { weekStartsOn: 0 }),
@@ -27,6 +29,7 @@ export function getPeriodRange(cadence: Cadence, date = new Date()): { start: Da
 
 export function getPeriodLabel(cadence: Cadence): string {
   switch (cadence) {
+    case "daily": return "today";
     case "weekly": return "this week";
     case "monthly": return "this month";
     case "yearly": return "this year";
@@ -64,6 +67,7 @@ export function getStreakHistory(
 
   function periodLabel(start: Date): string {
     switch (cadence) {
+      case "daily":   return format(start, "MMM d");
       case "weekly":  return format(start, "MMM d");
       case "monthly": return format(start, "MMM yyyy");
       case "yearly":  return format(start, "yyyy");

@@ -47,7 +47,9 @@ function groupByPeriod(completions: CompletionWithMedia[], cadence: Cadence): Pe
     const key = range.start.toISOString();
     if (!seen.has(key)) {
       seen.add(key);
-      const label = cadence === "weekly"
+      const label = cadence === "daily"
+        ? format(range.start, "EEE, MMM d")
+        : cadence === "weekly"
         ? `Week of ${format(range.start, "MMM d")}`
         : cadence === "monthly"
         ? format(range.start, "MMMM yyyy")
@@ -75,7 +77,7 @@ function StreakCalendar({
   label?: string;
   accentStyle?: { background: string; color: string; border: string };
 }) {
-  const periodCount = cadence === "weekly" ? 8 : cadence === "monthly" ? 6 : 3;
+  const periodCount = cadence === "daily" ? 14 : cadence === "weekly" ? 8 : cadence === "monthly" ? 6 : 3;
   const history = getStreakHistory(completions, cadence, target, periodCount);
   const streak = calculateStreak(completions, cadence, target);
 
@@ -96,12 +98,12 @@ function StreakCalendar({
               className="text-[10px] font-semibold uppercase tracking-[0.06em]"
               style={{ color }}
             >
-              {streak} {cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
+              {streak} {cadence === "daily" ? "day" : cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
             </span>
           )}
           {streak >= 2 && accentStyle && (
             <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[--muted]">
-              {streak} {cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
+              {streak} {cadence === "daily" ? "day" : cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
             </span>
           )}
         </div>
@@ -111,7 +113,7 @@ function StreakCalendar({
           className="text-[10px] font-semibold uppercase tracking-[0.06em] mb-1.5"
           style={{ color }}
         >
-          {streak} {cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
+          {streak} {cadence === "daily" ? "day" : cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"} streak
         </p>
       )}
       <div className="flex gap-1.5 flex-wrap">

@@ -6,14 +6,25 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import type { Cadence } from "@/types/database";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bell } from "lucide-react";
 
 const CADENCES: { value: Cadence; label: string }[] = [
+  { value: "daily", label: "Daily" },
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
   { value: "yearly", label: "Yearly" },
   { value: "once", label: "One-time" },
 ];
+
+function cadenceUnit(c: Cadence): string {
+  switch (c) {
+    case "daily":   return "day";
+    case "weekly":  return "week";
+    case "monthly": return "month";
+    case "yearly":  return "year";
+    case "once":    return "";
+  }
+}
 
 export default function EditGoalPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,23 +42,39 @@ export default function EditGoalPage() {
   const [fetching, setFetching] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // Reminder state — per-user, even on shared goals
+  const [remEnabled, setRemEnabled] = useState(false);
+  const [remHour12, setRemHour12] = useState(8);
+  const [remMinute, setRemMinute] = useState<0 | 30>(0);
+  const [remAmpm, setRemAmpm] = useState<"AM" | "PM">("PM");
+  const [remDow, setRemDow] = useState<number>(0);
+
   useEffect(() => {
-    if (!id) return;
-    supabase
-      .from("goals")
-      .select("*")
-      .eq("id", id)
-      .single()
-      .then(({ data }) => {
-        if (!data) { setNotFound(true); setFetching(false); return; }
-        setTitle(data.title);
-        setCadence(data.cadence);
-        setTarget(String(data.cadence_target));
-        setIsShared(data.owner_id === null);
-        setIsJoint(data.is_joint ?? false);
-        setFetching(false);
-      });
-  }, [id]);
+    if (!id || !user) return;
+    Promise.all([
+      supabase.from("goals").select("*").eq("id", id).single(),
+      supabase.from("goal_reminders").select("*").eq("goal_id", id).eq("user_id", user.id).maybeSingle(),
+    ]).then(([{ data: goal }, { data: rem }]) => {
+      if (!goal) { setNotFound(true); setFetching(false); return; }
+      setTitle(goal.title);
+      setCadence(goal.cadence);
+      setTarget(String(goal.cadence_target));
+      setIsShared(goal.owner_id === null);
+      setIsJoint(goal.is_joint ?? false);
+
+      if (rem && rem.enabled) {
+        setRemEnabled(true);
+        const h24 = rem.hour;
+        const ampm = h24 >= 12 ? "PM" : "AM";
+        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+        setRemHour12(h12);
+        setRemAmpm(ampm);
+        setRemMinute(rem.minute === 30 ? 30 : 0);
+        if (rem.day_of_week != null) setRemDow(rem.day_of_week);
+      }
+      setFetching(false);
+    });
+  }, [id, user]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +91,26 @@ export default function EditGoalPage() {
         is_joint: isShared ? isJoint : false,
       })
       .eq("id", id);
+
+    // Save / clear the user's personal reminder for this goal
+    if (cadence === "once") {
+      // Reminders don't make sense for one-time goals — clear any
+      await supabase.from("goal_reminders").delete().eq("goal_id", id).eq("user_id", user.id);
+    } else if (remEnabled) {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const hour24 = (remHour12 % 12) + (remAmpm === "PM" ? 12 : 0);
+      await supabase.from("goal_reminders").upsert({
+        goal_id: id,
+        user_id: user.id,
+        enabled: true,
+        hour: hour24,
+        minute: remMinute,
+        day_of_week: cadence === "weekly" ? remDow : null,
+        timezone: tz,
+      }, { onConflict: "goal_id,user_id" });
+    } else {
+      await supabase.from("goal_reminders").delete().eq("goal_id", id).eq("user_id", user.id);
+    }
 
     router.push(`/goals/${id}`);
   }
@@ -134,7 +181,7 @@ export default function EditGoalPage() {
         {cadence !== "once" && (
           <div className="flex flex-col gap-1.5">
             <label className="text-[13px] font-medium text-[--foreground]">
-              Target (times per {cadence === "weekly" ? "week" : cadence === "monthly" ? "month" : "year"})
+              Target (times per {cadenceUnit(cadence)})
             </label>
             <input
               type="number"
@@ -207,6 +254,89 @@ export default function EditGoalPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Reminder — only meaningful for recurring goals */}
+        {cadence !== "once" && (
+          <div className="bg-[--surface] border border-[--border] rounded-2xl px-4 py-3 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell size={15} className="text-[--muted]" />
+                <div>
+                  <p className="text-[14px] font-medium text-[--foreground]">Reminder</p>
+                  <p className="text-[12px] text-[--muted]">Push notification if not done yet</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRemEnabled(!remEnabled)}
+                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--primary]" : "bg-[--border]"}`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+
+            {remEnabled && (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-[--muted] mr-1">At</span>
+                  <select
+                    value={remHour12}
+                    onChange={(e) => setRemHour12(parseInt(e.target.value))}
+                    className="border border-[--border] rounded-xl px-2.5 py-2 text-[14px] bg-[--surface] text-[--foreground] focus:outline-none focus:border-[--primary]"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <span className="text-[14px] text-[--muted]">:</span>
+                  <select
+                    value={remMinute}
+                    onChange={(e) => setRemMinute(parseInt(e.target.value) === 30 ? 30 : 0)}
+                    className="border border-[--border] rounded-xl px-2.5 py-2 text-[14px] bg-[--surface] text-[--foreground] focus:outline-none focus:border-[--primary]"
+                  >
+                    <option value={0}>00</option>
+                    <option value={30}>30</option>
+                  </select>
+                  <select
+                    value={remAmpm}
+                    onChange={(e) => setRemAmpm(e.target.value === "PM" ? "PM" : "AM")}
+                    className="border border-[--border] rounded-xl px-2.5 py-2 text-[14px] bg-[--surface] text-[--foreground] focus:outline-none focus:border-[--primary]"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </div>
+
+                {cadence === "weekly" && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[12px] text-[--muted]">On</span>
+                    <div className="flex gap-1.5">
+                      {["S","M","T","W","T","F","S"].map((label, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setRemDow(idx)}
+                          className="w-8 h-8 rounded-full text-[12px] font-semibold transition-colors"
+                          style={{
+                            background: remDow === idx ? "var(--primary)" : "transparent",
+                            color: remDow === idx ? "#fff" : "var(--muted)",
+                            border: `1px solid ${remDow === idx ? "var(--primary)" : "var(--border)"}`,
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-[11px] text-[--muted]">
+                  Your timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}. Reminders are personal — your partner won&apos;t see them.
+                </p>
+              </>
+            )}
           </div>
         )}
 
