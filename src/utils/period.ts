@@ -1,5 +1,13 @@
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, format } from "date-fns";
 import type { Cadence } from "@/types/database";
+
+export interface PeriodRecord {
+  label: string;
+  start: Date;
+  end: Date;
+  met: boolean;
+  inProgress: boolean;
+}
 
 export function getPeriodRange(cadence: Cadence, date = new Date()): { start: Date; end: Date } | null {
   switch (cadence) {
@@ -37,6 +45,53 @@ export function countCompletionsInPeriod(
     const d = new Date(c.completed_at);
     return d >= range.start && d <= range.end;
   }).length;
+}
+
+export function getStreakHistory(
+  completions: { completed_at: string }[],
+  cadence: Cadence,
+  target: number,
+  count: number
+): PeriodRecord[] {
+  if (cadence === "once") return [];
+
+  function countInRange(start: Date, end: Date): number {
+    return completions.filter(c => {
+      const d = new Date(c.completed_at);
+      return d >= start && d <= end;
+    }).length;
+  }
+
+  function periodLabel(start: Date): string {
+    switch (cadence) {
+      case "weekly":  return format(start, "MMM d");
+      case "monthly": return format(start, "MMM yyyy");
+      case "yearly":  return format(start, "yyyy");
+      default:        return "";
+    }
+  }
+
+  const currentRange = getPeriodRange(cadence, new Date())!;
+  const periods: { start: Date; end: Date; inProgress: boolean }[] = [
+    { start: currentRange.start, end: currentRange.end, inProgress: true },
+  ];
+
+  let checkDate = new Date(currentRange.start.getTime() - 1);
+  for (let i = 1; i < count; i++) {
+    const range = getPeriodRange(cadence, checkDate)!;
+    periods.push({ start: range.start, end: range.end, inProgress: false });
+    checkDate = new Date(range.start.getTime() - 1);
+  }
+
+  periods.reverse(); // oldest → newest (left → right in UI)
+
+  return periods.map(p => ({
+    label: periodLabel(p.start),
+    start: p.start,
+    end: p.end,
+    met: countInRange(p.start, p.end) >= target,
+    inProgress: p.inProgress,
+  }));
 }
 
 export function calculateStreak(

@@ -5,7 +5,7 @@ import { useAppData } from "@/contexts/app-data";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Check } from "lucide-react";
-import { countCompletionsInPeriod } from "@/utils/period";
+import { countCompletionsInPeriod, calculateStreak } from "@/utils/period";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { GoalsSkeleton } from "@/components/ui/page-skeleton";
 
@@ -115,6 +115,11 @@ function GoalCardFocus({
   const chipColor = goal.color ?? "#374151";
   const cadenceLabel = CADENCE_LABEL[goal.cadence] ?? goal.cadence;
 
+  const streakComps = isShared && !goal.is_joint
+    ? goal.completions.filter(c => c.user_id === userId)
+    : goal.completions;
+  const streak = calculateStreak(streakComps, goal.cadence, target);
+
   const cardBg = done ? "var(--surface)" : chipColor + "0d";
   const cardBorder = done ? "var(--border)" : chipColor + "30";
   const opacity = isPartner ? 0.78 : isDone ? 0.55 : 1;
@@ -218,6 +223,19 @@ function GoalCardFocus({
             />
           </div>
         )
+      )}
+
+      {/* Streak badge */}
+      {streak >= 2 && goal.cadence !== "once" && (
+        <div className="pl-[19px] flex items-center gap-1.5">
+          <div style={{ width: 5, height: 5, borderRadius: "50%", background: done ? "var(--success)" : chipColor, flexShrink: 0 }} />
+          <span
+            className="text-[10px] font-semibold uppercase tracking-[0.06em]"
+            style={{ color: done ? "var(--success)" : chipColor }}
+          >
+            {streak} {goal.cadence === "weekly" ? "week" : goal.cadence === "monthly" ? "month" : "year"} streak
+          </span>
+        </div>
       )}
     </div>
   );
