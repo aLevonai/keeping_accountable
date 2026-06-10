@@ -5,16 +5,10 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { generateInviteCode, inviteExpiry } from "@/utils/invite";
 import { AppLogo } from "@/components/ui/logo";
 
 type Step = "name" | "choose" | "create" | "join";
-
-function generateInviteCode() {
-  const words = ["ROSE", "MOON", "LOVE", "STAR", "BLOOM", "SOUL", "BOND", "GLOW"];
-  const word = words[Math.floor(Math.random() * words.length)];
-  const num = Math.floor(1000 + Math.random() * 9000);
-  return `${word}-${num}`;
-}
 
 export default function OnboardPage() {
   const [step, setStep] = useState<Step>("name");
@@ -75,7 +69,7 @@ export default function OnboardPage() {
       couple_id: coupleId,
       inviter_id: user.id,
       code,
-      expires_at: "2099-01-01T00:00:00Z",
+      expires_at: inviteExpiry(),
     });
 
     setGeneratedCode(code);

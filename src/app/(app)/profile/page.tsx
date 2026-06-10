@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { usePush } from "@/hooks/use-push";
+import { generateInviteCode, inviteExpiry } from "@/utils/invite";
 import { ChevronRight } from "lucide-react";
 
 function getPartnerInitial(name: string): string {
@@ -65,15 +66,12 @@ export default function ProfilePage() {
       .eq("couple_id", couple.id)
       .is("accepted_at", null);
     // Generate new one
-    const words = ["ROSE", "MOON", "LOVE", "STAR", "BLOOM", "SOUL", "BOND", "GLOW"];
-    const word = words[Math.floor(Math.random() * words.length)];
-    const num = Math.floor(1000 + Math.random() * 9000);
-    const newCode = `${word}-${num}`;
+    const newCode = generateInviteCode();
     await supabase.from("couple_invites").insert({
       couple_id: couple.id,
       inviter_id: user.id,
       code: newCode,
-      expires_at: "2099-01-01T00:00:00Z",
+      expires_at: inviteExpiry(),
     });
     setInviteCode(newCode);
     setRegenerating(false);

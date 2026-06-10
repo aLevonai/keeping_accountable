@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { useCouple } from "@/hooks/use-couple";
-import { getPhotoUrl } from "@/utils/storage";
+import { useAppData } from "@/contexts/app-data";
+import { getSignedPhotoUrls } from "@/utils/storage";
 import { format } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
 import { Trash2, ImageOff } from "lucide-react";
@@ -102,12 +102,14 @@ function PolaroidCard({
   entry,
   index,
   isOwn,
+  photoUrl,
   onRemovePhoto,
   onDeleteEntry,
 }: {
   entry: JournalEntry;
   index: number;
   isOwn: boolean;
+  photoUrl?: string;
   onRemovePhoto: (entry: JournalEntry) => void;
   onDeleteEntry: (entry: JournalEntry) => void;
 }) {
@@ -134,11 +136,13 @@ function PolaroidCard({
 
       {/* Photo area */}
       <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
-        {photo ? (
+        {photo && photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={getPhotoUrl(photo.storage_path)}
+            src={photoUrl}
             alt="Check-in"
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
         ) : (
@@ -191,8 +195,9 @@ function PolaroidCard({
 
 export default function JournalPage() {
   const { user } = useAuth();
-  const { couple } = useCouple(user?.id);
+  const { couple } = useAppData();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -205,7 +210,10 @@ export default function JournalPage() {
       .order("completed_at", { ascending: false })
       .limit(100);
 
-    setEntries((data ?? []) as unknown as JournalEntry[]);
+    const list = (data ?? []) as unknown as JournalEntry[];
+    setEntries(list);
+    const paths = list.flatMap((e) => e.completion_media?.map((m) => m.storage_path) ?? []);
+    setPhotoUrls(await getSignedPhotoUrls(paths));
     setLoading(false);
   }, [couple?.id]);
 
@@ -259,6 +267,7 @@ export default function JournalPage() {
                 entry={entry}
                 index={i * 2}
                 isOwn={entry.user_id === user?.id}
+                photoUrl={entry.completion_media?.[0] ? photoUrls[entry.completion_media[0].storage_path] : undefined}
                 onRemovePhoto={handleRemovePhoto}
                 onDeleteEntry={handleDeleteEntry}
               />
@@ -272,6 +281,7 @@ export default function JournalPage() {
                 entry={entry}
                 index={i * 2 + 1}
                 isOwn={entry.user_id === user?.id}
+                photoUrl={entry.completion_media?.[0] ? photoUrls[entry.completion_media[0].storage_path] : undefined}
                 onRemovePhoto={handleRemovePhoto}
                 onDeleteEntry={handleDeleteEntry}
               />

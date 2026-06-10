@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { useCouple } from "@/hooks/use-couple";
+import { useAppData } from "@/contexts/app-data";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { countCompletionsInPeriod, getPeriodLabel, calculateStreak, getStreakHistory, getPeriodRange } from "@/utils/period";
 import type { Cadence } from "@/types/database";
-import { getPhotoUrl, uploadPhoto } from "@/utils/storage";
+import { getSignedPhotoUrls, uploadPhoto } from "@/utils/storage";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Camera, Pencil, ImagePlus } from "lucide-react";
 import { GoalDetailSkeleton } from "@/components/ui/page-skeleton";
@@ -147,9 +147,10 @@ export default function GoalDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { partner, couple, self } = useCouple(user?.id);
+  const { partner, couple, self } = useAppData();
   const supabase = createClient();
   const [goal, setGoal] = useState<GoalWithCompletions | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [notFound, setNotFound] = useState(false);
   const [nudgeSent, setNudgeSent] = useState(false);
   const [changingPhotoId, setChangingPhotoId] = useState<string | null>(null);
@@ -167,7 +168,12 @@ export default function GoalDetailPage() {
     if (!data) {
       setNotFound(true);
     } else {
-      setGoal(data as GoalWithCompletions);
+      const g = data as GoalWithCompletions;
+      setGoal(g);
+      const paths = (g.completions as CompletionWithMedia[]).flatMap(
+        (c) => c.completion_media?.map((m) => m.storage_path) ?? []
+      );
+      setPhotoUrls(await getSignedPhotoUrls(paths));
     }
   }, [id]);
 
@@ -192,7 +198,6 @@ export default function GoalDetailPage() {
     try {
       await supabase.functions.invoke("send-push", {
         body: {
-          target_user_id: partner.id,
           title: "CheckMate",
           body: `Time to work on "${goal?.title}"! Your partner is rooting for you.`,
         },
@@ -460,22 +465,28 @@ export default function GoalDetailPage() {
                   {group.items.map((c) => (
                     <div key={c.id} className="bg-[--surface] rounded-2xl border border-[--border] overflow-hidden">
                       {c.completion_media?.[0] ? (
-                        <div className="relative">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={getPhotoUrl(c.completion_media[0].storage_path)}
-                            alt="Check-in photo"
-                            className={`w-full aspect-video object-cover transition-opacity ${changingPhotoId === c.completion_media[0].id ? "opacity-40" : ""}`}
-                          />
-                          {c.user_id === user?.id && (
-                            <button
-                              onClick={() => openChangePhoto(c.completion_media[0].id, c.id)}
-                              disabled={!!changingPhotoId}
-                              className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-[11px] font-medium px-2 py-1 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
-                            >
-                              <ImagePlus size={12} />
-                              Change
-                            </button>
+                        <div className="relative aspect-video bg-[--surface-alt]">
+                          {photoUrls[c.completion_media[0].storage_path] && (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={photoUrls[c.completion_media[0].storage_path]}
+                                alt="Check-in photo"
+                                loading="lazy"
+                                decoding="async"
+                                className={`w-full h-full object-cover transition-opacity ${changingPhotoId === c.completion_media[0].id ? "opacity-40" : ""}`}
+                              />
+                              {c.user_id === user?.id && (
+                                <button
+                                  onClick={() => openChangePhoto(c.completion_media[0].id, c.id)}
+                                  disabled={!!changingPhotoId}
+                                  className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-[11px] font-medium px-2 py-1 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
+                                >
+                                  <ImagePlus size={12} />
+                                  Change
+                                </button>
+                              )}
+                            </>
                           )}
                         </div>
                       ) : (

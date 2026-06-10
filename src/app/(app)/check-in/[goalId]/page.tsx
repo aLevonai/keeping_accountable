@@ -4,15 +4,16 @@ import { useState, useRef, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { useCouple } from "@/hooks/use-couple";
+import { useAppData } from "@/contexts/app-data";
 import { uploadPhoto } from "@/utils/storage";
+import { compressImage } from "@/utils/image";
 import { ArrowLeft, Camera, Check } from "lucide-react";
 
 export default function CheckInPage() {
   const { goalId } = useParams<{ goalId: string }>();
   const router = useRouter();
   const { user } = useAuth();
-  const { couple, self, partner } = useCouple(user?.id);
+  const { couple, self, partner } = useAppData();
   const supabase = createClient();
 
   const [note, setNote] = useState("");
@@ -20,9 +21,20 @@ export default function CheckInPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [goalTitle, setGoalTitle] = useState<string | null>(null);
   const [goalColor, setGoalColor] = useState<string>("#C4704F");
   const fileRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Revoke the object URL when the preview changes or the page unmounts.
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
 
   useEffect(() => {
     if (!goalId) return;
@@ -66,34 +78,41 @@ export default function CheckInPage() {
       return;
     }
 
-    if (photo) {
-      try {
-        const path = await uploadPhoto(photo, couple.id, user.id, completion.id);
-        await supabase.from("completion_media").insert({
-          completion_id: completion.id,
-          storage_path: path,
-          media_type: "photo",
-        });
-      } catch {
-        // Photo upload failed but completion was saved
-      }
-    }
-
-    if (partner?.id && goalTitle) {
-      try {
-        await supabase.functions.invoke("send-push", {
-          body: {
-            target_user_id: partner.id,
-            title: "CheckMate",
-            body: `${self?.display_name ?? "Your partner"} just checked in on "${goalTitle}"`,
-          },
-        });
-      } catch {
-        // Ignore notification errors
-      }
-    }
-
+    // The check-in is saved — show success immediately and finish the slow work
+    // (compress + upload photo, fire push) in the background.
+    if (photo) setUploadingPhoto(true);
     setSuccess(true);
+
+    void (async () => {
+      if (photo) {
+        try {
+          const compressed = await compressImage(photo);
+          const path = await uploadPhoto(compressed, couple.id, user.id, completion.id);
+          await supabase.from("completion_media").insert({
+            completion_id: completion.id,
+            storage_path: path,
+            media_type: "photo",
+          });
+        } catch {
+          // Photo upload failed but completion was saved
+        } finally {
+          if (mountedRef.current) setUploadingPhoto(false);
+        }
+      }
+
+      if (partner?.id && goalTitle) {
+        try {
+          await supabase.functions.invoke("send-push", {
+            body: {
+              title: "CheckMate",
+              body: `${self?.display_name ?? "Your partner"} just checked in on "${goalTitle}"`,
+            },
+          });
+        } catch {
+          // Ignore notification errors
+        }
+      }
+    })();
   }
 
   if (success) {
@@ -109,6 +128,9 @@ export default function CheckInPage() {
           Logged
         </p>
         <p className="text-[14px] text-[--muted] text-center">{goalTitle}</p>
+        {uploadingPhoto && (
+          <p className="text-[12px] text-[--muted] text-center">Saving photo…</p>
+        )}
         <button
           onClick={() => router.push("/goals")}
           className="mt-2 text-[14px]"
