@@ -2,163 +2,331 @@
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
-import { useCouple } from "@/hooks/use-couple";
-import { useGoals } from "@/hooks/use-goals";
+import { useAppData } from "@/contexts/app-data";
+import { useDreams } from "@/hooks/use-dreams";
 import { countCompletionsInPeriod, getPeriodRange } from "@/utils/period";
-import { startOfWeek, addDays, isSameDay } from "date-fns";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
-import type { Cadence } from "@/types/database";
+import { HomeSkeleton } from "@/components/ui/page-skeleton";
+import { Check, Plus } from "lucide-react";
+import { AppLogo } from "@/components/ui/logo";
 
-// Mon–Sun labels
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+function getInitial(name: string): string {
+  return name.trim().charAt(0).toUpperCase();
+}
 
-function WeekDots({ completions }: { completions: { completed_at: string }[] }) {
-  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+function countWeeklyCheckIns(goals: GoalWithCompletions[], userId: string): number {
+  const range = getPeriodRange("weekly");
+  if (!range) return 0;
+  let total = 0;
+  for (const g of goals) {
+    total += g.completions.filter(c => {
+      if (c.user_id !== userId) return false;
+      const d = new Date(c.completed_at);
+      return d >= range.start && d <= range.end;
+    }).length;
+  }
+  return total;
+}
+
+function ScoreCard({
+  selfName,
+  partnerName,
+  selfInitial,
+  partnerInitial,
+  myCount,
+  partnerCount,
+}: {
+  selfName: string;
+  partnerName: string;
+  selfInitial: string;
+  partnerInitial: string;
+  myCount: number;
+  partnerCount: number;
+}) {
+  const total = myCount + partnerCount;
+  const myPct = total > 0 ? (myCount / total) * 100 : 50;
+  const partnerPct = total > 0 ? (partnerCount / total) * 100 : 50;
+
   return (
-    <div className="flex gap-1">
-      {WEEKDAYS.map((label, i) => {
-        const day = addDays(weekStart, i);
-        const filled = completions.some((c) => isSameDay(new Date(c.completed_at), day));
-        return (
-          <div key={i} className="flex flex-col items-center gap-0.5">
-            <div className={`w-5 h-5 rounded-full border ${filled ? "bg-black border-black" : "border-gray-300"}`} />
-            <span className="text-[9px] text-gray-400">{label}</span>
+    <div className="mx-4 mb-3 bg-[--surface] rounded-2xl border border-[--border] p-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[--muted] mb-3">
+        This week
+      </p>
+
+      {/* Relative bar */}
+      <div className="flex h-[6px] rounded-full overflow-hidden gap-[2px] mb-3">
+        <div
+          className="h-full rounded-l-full transition-all duration-500"
+          style={{ width: `${myPct}%`, background: "var(--primary)" }}
+        />
+        <div
+          className="h-full rounded-r-full transition-all duration-500"
+          style={{ width: `${partnerPct}%`, background: "var(--partner-accent)" }}
+        />
+      </div>
+
+      {/* Labels */}
+      <div className="flex justify-between">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+            style={{ background: "var(--primary-light)", color: "var(--primary)", border: "1.5px solid rgba(196,112,79,0.4)" }}
+          >
+            {selfInitial}
           </div>
-        );
-      })}
+          <div>
+            <p className="text-[12px] font-semibold text-[--foreground]">You</p>
+            <p className="text-[11px] text-[--muted]">{myCount} check-in{myCount !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-row-reverse">
+          <div
+            className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+            style={{ background: "var(--partner-light)", color: "var(--partner-accent)", border: "1.5px solid rgba(74,122,155,0.4)" }}
+          >
+            {partnerInitial}
+          </div>
+          <div className="text-right">
+            <p className="text-[12px] font-semibold text-[--foreground]">{partnerName}</p>
+            <p className="text-[11px] text-[--muted]">{partnerCount} check-in{partnerCount !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function GoalRow({ goal, userId }: { goal: GoalWithCompletions; userId: string }) {
-  const count = countCompletionsInPeriod(goal.completions, goal.cadence);
-  const target = goal.cadence_target;
-  const done = goal.cadence === "once" ? count >= 1 : count >= target;
+function UpNextRow({ goal, userId, partnerId }: {
+  goal: GoalWithCompletions;
+  userId: string;
+  partnerId: string;
+}) {
   const isShared = goal.owner_id === null;
+  const myCount = isShared
+    ? countCompletionsInPeriod(goal.completions.filter(c => c.user_id === userId), goal.cadence)
+    : countCompletionsInPeriod(goal.completions, goal.cadence);
+  const target = goal.cadence_target;
+  const myDone = myCount >= target;
+  const chipColor = goal.color ?? "#374151";
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-gray-100">
-      {/* Goal info */}
-      <Link href={`/goals/${goal.id}`} className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium text-sm text-gray-900 truncate">{goal.title}</span>
-          {isShared && <span className="text-[10px] text-gray-400 border border-gray-200 rounded px-1">shared</span>}
-          {!isShared && goal.owner_id !== userId && <span className="text-[10px] text-gray-400 border border-gray-200 rounded px-1">partner</span>}
-        </div>
-        <div className="mt-1.5">
-          {goal.cadence === "weekly" ? (
-            <WeekDots completions={goal.completions} />
-          ) : (
-            <span className="text-xs text-gray-500">
-              {goal.cadence === "once"
-                ? done ? "Done ✓" : "Not done"
-                : `${count} / ${target} this ${goal.cadence}`}
-            </span>
-          )}
-        </div>
-      </Link>
-
-      {/* Count badge for weekly */}
-      {goal.cadence === "weekly" && (
-        <span className="text-xs text-gray-500 w-8 text-right">{count}/{target}</span>
-      )}
-
-      {/* Check-in button */}
-      {(isShared || goal.owner_id === userId) && !done && (
+    <div className="flex items-center gap-3 py-2.5 border-b border-[--border] last:border-0">
+      <div
+        className="flex-shrink-0 mt-px"
+        style={{ width: 10, height: 10, borderRadius: 2, background: chipColor }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-[14px] font-medium text-[--foreground] truncate">{goal.title}</p>
+        <p className="text-[11px] text-[--muted]">
+          {myCount}/{target} {goal.cadence}
+          {isShared && " · Shared"}
+        </p>
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {myDone && (
+          <div className="w-[20px] h-[20px] rounded-full bg-[--success-light] flex items-center justify-center flex-shrink-0">
+            <Check size={9} className="text-[--success]" />
+          </div>
+        )}
         <Link
           href={`/check-in/${goal.id}`}
-          className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-full text-gray-500 text-lg leading-none hover:bg-gray-50 active:scale-95 transition-transform flex-shrink-0"
-        >
-          +
-        </Link>
-      )}
-      {done && (
-        <span className="w-8 h-8 flex items-center justify-center text-base">✓</span>
-      )}
+          className="flex items-center justify-center rounded-full font-semibold text-[16px] leading-none active:scale-95 transition-transform flex-shrink-0"
+          style={{
+            width: 26,
+            height: 26,
+            background: myDone ? "transparent" : chipColor + "20",
+            border: myDone ? "1.5px dashed var(--border)" : `1px solid ${chipColor}50`,
+            color: myDone ? "var(--muted)" : chipColor,
+          }}
+        >+</Link>
+      </div>
     </div>
   );
 }
 
-function onTrackCount(goals: GoalWithCompletions[], userId: string): { onTrack: number; total: number } {
-  const mine = goals.filter((g) => g.owner_id === null || g.owner_id === userId);
-  const onTrack = mine.filter((g) => {
-    const count = countCompletionsInPeriod(g.completions, g.cadence);
-    return count >= g.cadence_target;
-  });
-  return { onTrack: onTrack.length, total: mine.length };
+function PartnerActivityRow({ goal, partnerId }: {
+  goal: GoalWithCompletions;
+  partnerId: string;
+}) {
+  const count = countCompletionsInPeriod(
+    goal.completions.filter(c => c.user_id === partnerId),
+    goal.cadence
+  );
+  const target = goal.cadence_target;
+  const done = count >= target;
+  const chipColor = goal.color ?? "#374151";
+
+  return (
+    <div className="flex items-center gap-3 py-2 border-b border-[--border] last:border-0" style={{ opacity: 0.82 }}>
+      <div
+        className="flex-shrink-0"
+        style={{ width: 10, height: 10, borderRadius: 2, background: chipColor }}
+      />
+      <span className="text-[13px] text-[--foreground] flex-1 truncate">{goal.title}</span>
+      <span className="text-[11px] text-[--muted] flex-shrink-0">
+        {done ? "✓" : `${count}/${target}`}
+      </span>
+    </div>
+  );
 }
 
 export default function HomePage() {
   const { user } = useAuth();
-  const { couple, partner, self, loading: coupleLoading } = useCouple(user?.id);
-  const { goals, loading: goalsLoading } = useGoals(couple?.id);
+  const { couple, partner, self, loading: coupleLoading, goalsLoading, goals } = useAppData();
+  const { dreams } = useDreams(couple?.id);
+  const loading = !user || coupleLoading || goalsLoading;
 
-  const loading = coupleLoading || goalsLoading;
-
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen text-gray-400">Loading...</div>;
-  }
+  if (loading) return <HomeSkeleton />;
 
   if (!couple) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen px-6 gap-3 text-center">
-        <p className="font-semibold text-gray-900">Waiting for your partner</p>
-        <p className="text-sm text-gray-500">Share your invite code from the Profile tab so they can join.</p>
+        <p className="font-semibold text-[--foreground]">Waiting for your partner</p>
+        <p className="text-sm text-[--muted]">Share your invite code from the Profile tab so they can join.</p>
       </div>
     );
   }
 
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  const { onTrack, total } = onTrackCount(goals, user!.id);
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
 
-  const sharedGoals = goals.filter((g) => g.owner_id === null);
-  const myGoals = goals.filter((g) => g.owner_id === user?.id);
-  const partnerGoals = goals.filter((g) => g.owner_id === partner?.id);
+  const myGoals = goals.filter(g => g.owner_id === user?.id || g.owner_id === null);
+  const partnerGoals = goals.filter(g => g.owner_id === partner?.id || g.owner_id === null);
+
+  const isDoneForMe = (g: GoalWithCompletions) => {
+    const isShared = g.owner_id === null;
+    const myCount = isShared
+      ? countCompletionsInPeriod(g.completions.filter(c => c.user_id === user!.id), g.cadence)
+      : countCompletionsInPeriod(g.completions, g.cadence);
+    return g.cadence === "once" ? myCount >= 1 : myCount >= g.cadence_target;
+  };
+
+  const myCheckIns = countWeeklyCheckIns(goals, user!.id);
+  const partnerCheckIns = partner ? countWeeklyCheckIns(goals, partner.id) : 0;
+
+  const selfInitial = getInitial(self?.display_name ?? "Y");
+  const partnerInitial = getInitial(partner?.display_name ?? "P");
+  const partnerFirstName = partner?.display_name.split(" ")[0] ?? "Partner";
+
+  // "Up next for you" — not done first, then done, my goals + shared goals
+  const upNext = [
+    ...myGoals.filter(g => !isDoneForMe(g)),
+    ...myGoals.filter(g => isDoneForMe(g)),
+  ];
+
+  // Partner activity — partner's goals + shared
+  const partnerActivity = partnerGoals.filter(g => g.owner_id === partner?.id);
+
+  const sharedDreams = dreams.filter(d => d.owner_id === null && d.achieved_at === null);
 
   return (
-    <div className="px-4 pt-12 pb-4">
+    <div className="pb-4">
       {/* Header */}
-      <div className="mb-4">
-        <p className="text-xs text-gray-400 uppercase tracking-wide">{today}</p>
-        <h1 className="text-xl font-bold text-gray-900 mt-0.5">
-          {self?.display_name} & {partner?.display_name ?? "partner"}
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {total === 0 ? "No goals yet" : `${onTrack} of ${total} goals on track`}
-        </p>
+      <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-[--muted]">{dateLabel}</p>
+          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground] leading-tight mt-0.5">
+            CheckMate
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/goals/new"
+            className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white active:scale-95 transition-transform duration-150"
+          >
+            <Plus size={18} />
+          </Link>
+          <AppLogo size={38} />
+        </div>
       </div>
 
-      {goals.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <p className="text-gray-500 text-sm">No goals yet.</p>
-          <Link href="/goals/new" className="text-sm font-medium underline text-gray-700">Add your first goal</Link>
-        </div>
-      ) : (
-        <>
-          {sharedGoals.length > 0 && (
-            <section className="mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Together</p>
-              {sharedGoals.map((g) => <GoalRow key={g.id} goal={g} userId={user!.id} />)}
-            </section>
-          )}
-          {myGoals.length > 0 && (
-            <section className="mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">You</p>
-              {myGoals.map((g) => <GoalRow key={g.id} goal={g} userId={user!.id} />)}
-            </section>
-          )}
-          {partnerGoals.length > 0 && (
-            <section className="mb-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{partner?.display_name}</p>
-              {partnerGoals.map((g) => <GoalRow key={g.id} goal={g} userId={user!.id} />)}
-            </section>
-          )}
-        </>
+      {/* Score card */}
+      {partner && (
+        <ScoreCard
+          selfName={self?.display_name ?? "You"}
+          partnerName={partnerFirstName}
+          selfInitial={selfInitial}
+          partnerInitial={partnerInitial}
+          myCount={myCheckIns}
+          partnerCount={partnerCheckIns}
+        />
       )}
 
-      <div className="mt-4">
-        <Link href="/goals/new" className="text-sm font-medium text-gray-700 underline">+ New goal</Link>
-      </div>
+      {/* Up next for you */}
+      {upNext.length > 0 && (
+        <div className="mx-4 mb-3 bg-[--surface] rounded-2xl border border-[--border] px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[--muted] mb-1">
+            Your goals
+          </p>
+          <div>
+            {upNext.map(g => (
+              <UpNextRow
+                key={g.id}
+                goal={g}
+                userId={user!.id}
+                partnerId={partner?.id ?? ""}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Partner this week */}
+      {partner && partnerActivity.length > 0 && (
+        <div className="mx-4 mb-3 bg-[--surface] rounded-2xl border border-[--border] px-4 py-3">
+          <div className="flex items-center gap-2 mb-1">
+            <div
+              className="w-[18px] h-[18px] rounded-full flex items-center justify-center text-[8px] font-bold flex-shrink-0"
+              style={{ background: "var(--partner-light)", color: "var(--partner-accent)", border: "1.5px solid rgba(74,122,155,0.4)" }}
+            >
+              {partnerInitial}
+            </div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[--muted]">
+              {partnerFirstName} this week
+            </p>
+          </div>
+          <div>
+            {partnerActivity.map(g => (
+              <PartnerActivityRow
+                key={g.id}
+                goal={g}
+                partnerId={partner.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Shared dreams */}
+      {sharedDreams.length > 0 && (
+        <div className="mb-3">
+          <div className="px-5 mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[--muted]">
+              Shared dreams
+            </p>
+            <Link href="/dreams" className="text-[11px] text-[--primary]">See all</Link>
+          </div>
+          <div className="flex gap-2.5 px-4 overflow-x-auto scrollbar-hide pb-1">
+            {sharedDreams.map(d => (
+              <Link
+                key={d.id}
+                href="/dreams"
+                className="flex-shrink-0 bg-[--surface] rounded-xl border border-[--border] px-3.5 py-3 min-w-[140px] max-w-[160px] active:scale-95 transition-transform"
+              >
+                <p className="text-[13px] font-medium text-[--foreground] line-clamp-2">{d.title}</p>
+                {d.note && <p className="text-[11px] text-[--muted] mt-1 line-clamp-1">{d.note}</p>}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {goals.length === 0 && (
+        <div className="flex flex-col items-center gap-3 py-10 text-center px-5">
+          <p className="text-[--muted] text-sm">No goals yet.</p>
+          <Link href="/goals/new" className="text-sm font-medium text-[--primary]">Add your first goal →</Link>
+        </div>
+      )}
     </div>
   );
 }

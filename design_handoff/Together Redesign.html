@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Together — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1A1714;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+  .tweaks-panel {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #FFFFFF;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    z-index: 9999;
+    width: 200px;
+    display: none;
+  }
+  .tweaks-panel.visible { display: block; }
+  .tweaks-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #999;
+    margin-bottom: 12px;
+  }
+  .tweak-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .tweak-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #444;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .theme-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    background: #F5F5F5;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+    transition: all 0.15s;
+    text-align: left;
+  }
+  .theme-btn.active {
+    border-color: #333;
+    background: #fff;
+  }
+  .theme-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useCallback } = React;
+
+// ── Themes ──────────────────────────────────────────────────
+const THEMES = {
+  linen: {
+    name: "Linen",
+    swatch: "#C4704F",
+    bg: "#F8F4F0",
+    surface: "#FFFFFF",
+    surfaceAlt: "#F2EDE8",
+    text: "#1C1713",
+    muted: "#9C8B7E",
+    border: "#E8E0D8",
+    accent: "#C4704F",
+    accentLight: "#F5EAE4",
+    success: "#5A8A6A",
+    successLight: "#E8F2EC",
+    fontDisplay: "'Instrument Serif', Georgia, serif",
+    fontBody: "'DM Sans', system-ui, sans-serif",
+    navBg: "rgba(248,244,240,0.94)",
+  },
+  sage: {
+    name: "Sage",
+    swatch: "#3D7A58",
+    bg: "#F3F5F2",
+    surface: "#FFFFFF",
+    surfaceAlt: "#EBF0EA",
+    text: "#1A1D1A",
+    muted: "#7A8C7A",
+    border: "#DDE5DD",
+    accent: "#3D7A58",
+    accentLight: "#E5F0EA",
+    success: "#3D7A58",
+    successLight: "#E5F0EA",
+    fontDisplay: "'DM Sans', system-ui, sans-serif",
+    fontBody: "'DM Sans', system-ui, sans-serif",
+    navBg: "rgba(243,245,242,0.94)",
+  },
+  dusk: {
+    name: "Dusk",
+    swatch: "#7B4A8A",
+    bg: "#F7F2F6",
+    surface: "#FFFFFF",
+    surfaceAlt: "#F0E9F2",
+    text: "#1C1218",
+    muted: "#9A7A92",
+    border: "#E5DAE2",
+    accent: "#7B4A8A",
+    accentLight: "#F0E5F5",
+    success: "#5A7A5A",
+    successLight: "#E5EEE5",
+    fontDisplay: "'Playfair Display', Georgia, serif",
+    fontBody: "'DM Sans', system-ui, sans-serif",
+    navBg: "rgba(247,242,246,0.94)",
+  },
+};
+
+// ── Mock data ────────────────────────────────────────────────
+const ME = { name: "Alex", initial: "A" };
+const PARTNER = { name: "Jordan", initial: "J" };
+
+// completions[i] = 1 means day i (Mon=0) was completed
+const SHARED_GOALS = [
+  { id: 1, title: "Cook a meal together", cadence: "weekly", target: 2, myDays: [0,0,0,1,0,0,0], partnerDays: [0,0,0,1,0,0,0] },
+  { id: 2, title: "Morning walk", cadence: "weekly", target: 3, myDays: [1,0,1,0,0,0,0], partnerDays: [1,0,0,0,0,0,0] },
+];
+const MY_GOALS = [
+  { id: 3, title: "Read 30 minutes", cadence: "weekly", target: 5, myDays: [1,1,0,1,0,0,0] },
+  { id: 4, title: "Meditate", cadence: "weekly", target: 7, myDays: [1,1,1,0,0,0,0] },
+];
+const PARTNER_GOALS = [
+  { id: 5, title: "Learn guitar", cadence: "weekly", target: 3, partnerDays: [0,1,0,1,0,0,0] },
+  { id: 6, title: "Spanish practice", cadence: "weekly", target: 5, partnerDays: [1,0,1,1,0,0,0] },
+];
+
+const JOURNAL = [
+  { id: 1, goal: "Morning walk", who: "Alex", day: "Mon", note: "Foggy but beautiful", hasPhoto: true, rotation: -1.5, color: "#D4C4B8" },
+  { id: 2, goal: "Cook a meal together", who: "Jordan", day: "Thu", note: "Pasta night", hasPhoto: true, rotation: 1.2, color: "#C4D0C4" },
+  { id: 3, goal: "Read 30 minutes", who: "Alex", day: "Tue", note: null, hasPhoto: false, rotation: -0.8, color: "#C8C4D4" },
+  { id: 4, goal: "Learn guitar", who: "Jordan", day: "Tue", note: "Finally nailed the F chord", hasPhoto: true, rotation: 1.8, color: "#D4C8C0" },
+  { id: 5, goal: "Meditate", who: "Alex", day: "Mon", note: null, hasPhoto: false, rotation: -1.2, color: "#C4CCD4" },
+  { id: 6, goal: "Morning walk", who: "Jordan", day: "Mon", note: "Beat you home 😄", hasPhoto: true, rotation: 0.6, color: "#D0C4C8" },
+];
+
+// ── Shared components ────────────────────────────────────────
+function WeekBar({ days, color, t }) {
+  const labels = ["M","T","W","T","F","S","S"];
+  const today = 3; // Thursday (0-indexed)
+  return (
+    <div style={{ display: "flex", gap: 3, alignItems: "flex-end" }}>
+      {days.map((filled, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+          <div style={{
+            width: 6, height: 6, borderRadius: "50%",
+            background: filled ? color : t.border,
+            opacity: i > today ? 0.4 : 1,
+            transition: "background 0.2s",
+          }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GoalProgress({ count, target, color, t }) {
+  const pct = Math.min(count / target, 1);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: 1, height: 3, borderRadius: 99, background: t.border, overflow: "hidden" }}>
+        <div style={{ width: `${pct * 100}%`, height: "100%", borderRadius: 99, background: color, transition: "width 0.3s" }} />
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 500, color: t.muted, fontFamily: t.fontBody, minWidth: 22, textAlign: "right" }}>
+        {count}/{target}
+      </span>
+    </div>
+  );
+}
+
+function CheckIcon({ size = 14, color }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none">
+      <path d="M2.5 7L5.5 10L11.5 4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function Avatar({ initial, color, size = 28, t }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      background: color + "20",
+      border: `1.5px solid ${color}40`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.4, fontWeight: 600,
+      color: color, fontFamily: t.fontBody,
+      flexShrink: 0,
+    }}>{initial}</div>
+  );
+}
+
+// ── Home Screen ──────────────────────────────────────────────
+function HomeScreen({ t, onCheckin }) {
+  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  const myTotal = [...SHARED_GOALS.map(g => g.myDays), ...MY_GOALS.map(g => g.myDays)]
+    .reduce((s, days) => s + days.reduce((a, b) => a + b, 0), 0);
+  const partnerTotal = [...SHARED_GOALS.map(g => g.partnerDays), ...PARTNER_GOALS.map(g => g.partnerDays)]
+    .reduce((s, days) => s + days.reduce((a, b) => a + b, 0), 0);
+
+  return (
+    <div style={{ background: t.bg, minHeight: "100%", paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ padding: "16px 20px 12px" }}>
+        <p style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.07em", color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase" }}>
+          {today}
+        </p>
+        <h1 style={{ fontFamily: t.fontDisplay, fontSize: 26, fontWeight: 400, color: t.text, marginTop: 4, lineHeight: 1.2, fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>
+          Alex & Jordan
+        </h1>
+      </div>
+
+      {/* Partner split card */}
+      <div style={{ margin: "0 16px 20px", background: t.surface, borderRadius: 16, border: `1px solid ${t.border}`, overflow: "hidden" }}>
+        <div style={{ display: "flex" }}>
+          {/* Me */}
+          <div style={{ flex: 1, padding: "14px 16px", borderRight: `1px solid ${t.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+              <Avatar initial="A" color={t.accent} size={26} t={t} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: t.text, fontFamily: t.fontBody }}>You</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+              <span style={{ fontSize: 28, fontWeight: 300, color: t.text, fontFamily: t.fontBody, lineHeight: 1 }}>{myTotal}</span>
+              <span style={{ fontSize: 12, color: t.muted, fontFamily: t.fontBody }}>check-ins</span>
+            </div>
+            <p style={{ fontSize: 11, color: t.muted, marginTop: 4, fontFamily: t.fontBody }}>this week</p>
+          </div>
+          {/* Partner */}
+          <div style={{ flex: 1, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+              <Avatar initial="J" color={t.muted} size={26} t={t} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: t.text, fontFamily: t.fontBody }}>Jordan</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+              <span style={{ fontSize: 28, fontWeight: 300, color: t.text, fontFamily: t.fontBody, lineHeight: 1 }}>{partnerTotal}</span>
+              <span style={{ fontSize: 12, color: t.muted, fontFamily: t.fontBody }}>check-ins</span>
+            </div>
+            <p style={{ fontSize: 11, color: t.muted, marginTop: 4, fontFamily: t.fontBody }}>this week</p>
+          </div>
+        </div>
+        {/* Shared bar */}
+        <div style={{ background: t.surfaceAlt, padding: "8px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11, fontWeight: 500, color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase", letterSpacing: "0.06em" }}>Together</span>
+          <div style={{ flex: 1, height: 2, borderRadius: 99, background: t.border }}>
+            <div style={{ width: "60%", height: "100%", borderRadius: 99, background: t.accent }} />
+          </div>
+          <span style={{ fontSize: 11, color: t.muted, fontFamily: t.fontBody }}>3/5 goals</span>
+        </div>
+      </div>
+
+      {/* Shared goals */}
+      <div style={{ padding: "0 20px", marginBottom: 20 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase", marginBottom: 10 }}>
+          Shared
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {SHARED_GOALS.map((g, i) => {
+            const myCount = g.myDays.reduce((a, b) => a + b, 0);
+            const partnerCount = g.partnerDays.reduce((a, b) => a + b, 0);
+            const myDone = myCount >= g.target;
+            const partnerDone = partnerCount >= g.target;
+            return (
+              <div key={g.id} style={{
+                padding: "12px 0",
+                borderBottom: i < SHARED_GOALS.length - 1 ? `1px solid ${t.border}` : "none",
+              }}>
+                {/* Title row */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: t.text, fontFamily: t.fontBody }}>{g.title}</span>
+                  {!myDone && (
+                    <button onClick={() => onCheckin(g)} style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      border: `1.5px solid ${t.border}`,
+                      background: "transparent", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: t.muted, fontSize: 16, lineHeight: 1,
+                      fontFamily: t.fontBody,
+                    }}>+</button>
+                  )}
+                  {myDone && (
+                    <div style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <CheckIcon color={t.success} size={13} />
+                    </div>
+                  )}
+                </div>
+                {/* Dual progress */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {/* Me */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: t.muted, fontFamily: t.fontBody, width: 22, letterSpacing: "0.02em" }}>You</span>
+                    <div style={{ flex: 1, height: 3, borderRadius: 99, background: t.border, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(myCount / g.target, 1) * 100}%`, height: "100%", borderRadius: 99, background: myDone ? t.success : t.accent, transition: "width 0.3s" }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: t.muted, fontFamily: t.fontBody, width: 20, textAlign: "right" }}>{myCount}/{g.target}</span>
+                  </div>
+                  {/* Partner */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: t.muted, fontFamily: t.fontBody, width: 22, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "0.02em" }}>J</span>
+                    <div style={{ flex: 1, height: 3, borderRadius: 99, background: t.border, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(partnerCount / g.target, 1) * 100}%`, height: "100%", borderRadius: 99, background: partnerDone ? t.success : t.border, transition: "width 0.3s", opacity: 0.7 }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: t.muted, fontFamily: t.fontBody, width: 20, textAlign: "right", opacity: 0.7 }}>{partnerCount}/{g.target}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* My goals */}
+      <div style={{ padding: "0 20px", marginBottom: 20 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase", marginBottom: 10 }}>
+          You
+        </p>
+        {MY_GOALS.map((g, i) => {
+          const count = g.myDays.reduce((a, b) => a + b, 0);
+          const done = count >= g.target;
+          return (
+            <div key={g.id} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 0",
+              borderBottom: i < MY_GOALS.length - 1 ? `1px solid ${t.border}` : "none",
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
+                  {done && <CheckIcon color={t.success} />}
+                  <span style={{ fontSize: 14, fontWeight: 500, color: done ? t.muted : t.text, fontFamily: t.fontBody }}>{g.title}</span>
+                </div>
+                <GoalProgress count={count} target={g.target} color={done ? t.success : t.accent} t={t} />
+              </div>
+              {!done && (
+                <button onClick={() => onCheckin(g)} style={{
+                  width: 32, height: 32, borderRadius: "50%",
+                  border: `1.5px solid ${t.border}`,
+                  background: "transparent", cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: t.muted, fontSize: 18, fontFamily: t.fontBody,
+                }}>+</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Partner goals (read-only) */}
+      <div style={{ padding: "0 20px" }}>
+        <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase", marginBottom: 10 }}>
+          Jordan
+        </p>
+        {PARTNER_GOALS.map((g, i) => {
+          const count = g.partnerDays.reduce((a, b) => a + b, 0);
+          const done = count >= g.target;
+          return (
+            <div key={g.id} style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 0",
+              borderBottom: i < PARTNER_GOALS.length - 1 ? `1px solid ${t.border}` : "none",
+              opacity: 0.75,
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 7 }}>
+                  {done && <CheckIcon color={t.success} />}
+                  <span style={{ fontSize: 14, fontWeight: 400, color: t.text, fontFamily: t.fontBody }}>{g.title}</span>
+                </div>
+                <GoalProgress count={count} target={g.target} color={done ? t.success : t.muted} t={t} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Goals Screen ─────────────────────────────────────────────
+function GoalsScreen({ t, onCheckin }) {
+  const [filter, setFilter] = useState("all");
+  const filters = [
+    { key: "all", label: "All" },
+    { key: "mine", label: "Mine" },
+    { key: "shared", label: "Shared" },
+    { key: "partner", label: "Jordan" },
+  ];
+
+  const allGoals = [
+    ...SHARED_GOALS.map(g => ({ ...g, type: "shared", days: g.myDays })),
+    ...MY_GOALS.map(g => ({ ...g, type: "mine", days: g.myDays, partnerDays: Array(7).fill(0) })),
+    ...PARTNER_GOALS.map(g => ({ ...g, type: "partner", days: g.partnerDays, myDays: Array(7).fill(0) })),
+  ];
+  const visible = allGoals.filter(g => filter === "all" || g.type === filter);
+
+  return (
+    <div style={{ background: t.bg, minHeight: "100%", paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ padding: "16px 20px 0", display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+        <h1 style={{ fontFamily: t.fontDisplay, fontSize: 26, fontWeight: 400, color: t.text, fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>Goals</h1>
+        <button style={{
+          width: 36, height: 36, borderRadius: "50%",
+          background: t.accent, border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "#fff", fontSize: 20, lineHeight: 1,
+        }}>+</button>
+      </div>
+
+      {/* Filter pills */}
+      <div style={{ display: "flex", gap: 6, padding: "14px 20px", overflowX: "auto" }}>
+        {filters.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)} style={{
+            flexShrink: 0,
+            padding: "6px 14px", borderRadius: 99,
+            border: `1.5px solid ${filter === f.key ? t.accent : t.border}`,
+            background: filter === f.key ? t.accent : "transparent",
+            color: filter === f.key ? "#fff" : t.muted,
+            fontSize: 13, fontWeight: 500, fontFamily: t.fontBody,
+            cursor: "pointer", transition: "all 0.15s",
+          }}>{f.label}</button>
+        ))}
+      </div>
+
+      {/* Goal list */}
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {visible.map(g => {
+          const count = g.days.reduce((a, b) => a + b, 0);
+          const done = count >= g.target;
+          const isPartner = g.type === "partner";
+          return (
+            <div key={g.id} style={{
+              background: t.surface,
+              borderRadius: 14,
+              border: `1px solid ${done ? t.success + "40" : t.border}`,
+              padding: "14px 16px",
+              opacity: isPartner ? 0.8 : 1,
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+                <div>
+                  <span style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: t.fontBody }}>{g.title}</span>
+                  <div style={{ display: "flex", gap: 5, marginTop: 3 }}>
+                    {g.type === "shared" && (
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", color: t.accent, fontFamily: t.fontBody, textTransform: "uppercase" }}>Shared</span>
+                    )}
+                    {g.type === "partner" && (
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.06em", color: t.muted, fontFamily: t.fontBody, textTransform: "uppercase" }}>Jordan's</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {done ? (
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: t.successLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <CheckIcon color={t.success} size={13} />
+                    </div>
+                  ) : !isPartner ? (
+                    <button onClick={() => onCheckin(g)} style={{
+                      width: 28, height: 28, borderRadius: "50%",
+                      border: `1.5px solid ${t.border}`,
+                      background: "transparent", cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: t.muted, fontSize: 16,
+                    }}>+</button>
+                  ) : null}
+                </div>
+              </div>
+              {g.type === "shared" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                  {[
+                    { label: "You", days: g.myDays, color: done ? t.success : t.accent },
+                    { label: "Jordan", days: g.partnerDays, color: t.muted },
+                  ].map(row => {
+                    const c = row.days.reduce((a, b) => a + b, 0);
+                    return (
+                      <div key={row.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: t.muted, fontFamily: t.fontBody, width: 34 }}>{row.label}</span>
+                        <div style={{ flex: 1, height: 3, borderRadius: 99, background: t.border, overflow: "hidden" }}>
+                          <div style={{ width: `${Math.min(c / g.target, 1) * 100}%`, height: "100%", borderRadius: 99, background: row.color }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: t.muted, fontFamily: t.fontBody, width: 22, textAlign: "right" }}>{c}/{g.target}</span>
+                        <WeekBar days={row.days} color={row.color} t={t} />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <>
+                  <GoalProgress count={count} target={g.target} color={done ? t.success : isPartner ? t.muted : t.accent} t={t} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, alignItems: "center" }}>
+                    <WeekBar days={g.days} color={done ? t.success : isPartner ? t.muted : t.accent} t={t} />
+                    <span style={{ fontSize: 11, color: t.muted, fontFamily: t.fontBody }}>
+                      {g.cadence === "weekly" ? "this week" : "this month"}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Journal Screen ───────────────────────────────────────────
+function JournalScreen({ t }) {
+  const left = JOURNAL.filter((_, i) => i % 2 === 0);
+  const right = JOURNAL.filter((_, i) => i % 2 === 1);
+
+  const Polaroid = ({ entry }) => (
+    <div style={{
+      background: "#fff",
+      borderRadius: 3,
+      padding: "8px 8px 24px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.1), 0 0 0 0.5px rgba(0,0,0,0.06)",
+      transform: `rotate(${entry.rotation}deg)`,
+      marginBottom: 12,
+      transition: "transform 0.2s",
+    }}>
+      {/* Photo area */}
+      <div style={{
+        width: "100%", aspectRatio: "1 / 1.05",
+        background: entry.color,
+        borderRadius: 1,
+        marginBottom: 8,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        overflow: "hidden",
+      }}>
+        {entry.hasPhoto ? (
+          <div style={{ width: "100%", height: "100%", background: `linear-gradient(135deg, ${entry.color} 0%, ${entry.color}88 100%)` }} />
+        ) : (
+          <div style={{ fontSize: 11, color: "rgba(0,0,0,0.25)", fontFamily: "'DM Sans', sans-serif", textAlign: "center", padding: "0 8px" }}>no photo</div>
+        )}
+      </div>
+      <p style={{ fontSize: 10, fontWeight: 600, color: "#666", fontFamily: "'DM Sans', sans-serif", marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+        {entry.who} · {entry.day}
+      </p>
+      <p style={{ fontSize: 10, color: "#999", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.4 }}>
+        {entry.goal}
+      </p>
+      {entry.note && (
+        <p style={{ fontSize: 10, color: "#777", fontFamily: "'DM Sans', sans-serif", marginTop: 3, fontStyle: "italic", lineHeight: 1.4 }}>
+          "{entry.note}"
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ background: t.bg, minHeight: "100%", paddingBottom: 80 }}>
+      <div style={{ padding: "16px 20px 14px" }}>
+        <h1 style={{ fontFamily: t.fontDisplay, fontSize: 26, fontWeight: 400, color: t.text, fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>Journal</h1>
+        <p style={{ fontSize: 12, color: t.muted, fontFamily: t.fontBody, marginTop: 3 }}>April 2026</p>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, padding: "0 16px" }}>
+        <div style={{ flex: 1 }}>
+          {left.map(e => <Polaroid key={e.id} entry={e} />)}
+        </div>
+        <div style={{ flex: 1, paddingTop: 24 }}>
+          {right.map(e => <Polaroid key={e.id} entry={e} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Profile Screen ───────────────────────────────────────────
+function ProfileScreen({ t }) {
+  return (
+    <div style={{ background: t.bg, minHeight: "100%", paddingBottom: 80 }}>
+      <div style={{ padding: "16px 20px 24px" }}>
+        <h1 style={{ fontFamily: t.fontDisplay, fontSize: 26, fontWeight: 400, color: t.text, fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>Profile</h1>
+      </div>
+
+      {/* Avatar + name */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "0 20px 28px" }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: t.accentLight, border: `2px solid ${t.accent}30`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 28, fontWeight: 500, color: t.accent, fontFamily: t.fontBody,
+        }}>A</div>
+        <div style={{ textAlign: "center" }}>
+          <p style={{ fontSize: 18, fontWeight: 600, color: t.text, fontFamily: t.fontBody }}>Alex</p>
+          <p style={{ fontSize: 13, color: t.muted, fontFamily: t.fontBody, marginTop: 2 }}>alex@email.com</p>
+        </div>
+      </div>
+
+      {/* Partner section */}
+      <div style={{ margin: "0 16px 12px", background: t.surface, borderRadius: 14, border: `1px solid ${t.border}`, overflow: "hidden" }}>
+        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${t.border}` }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, textTransform: "uppercase", fontFamily: t.fontBody, marginBottom: 10 }}>Partner</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: t.border,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, fontWeight: 500, color: t.muted, fontFamily: t.fontBody,
+            }}>J</div>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 500, color: t.text, fontFamily: t.fontBody }}>Jordan</p>
+              <p style={{ fontSize: 12, color: t.muted, fontFamily: t.fontBody }}>Connected</p>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: "12px 16px" }}>
+          <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, textTransform: "uppercase", fontFamily: t.fontBody, marginBottom: 6 }}>Invite code</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18, fontWeight: 600, color: t.text, fontFamily: "'DM Sans', monospace", letterSpacing: "0.12em" }}>ROSE-7742</span>
+            <button style={{
+              fontSize: 11, fontWeight: 600, color: t.accent, fontFamily: t.fontBody,
+              background: t.accentLight, border: "none", borderRadius: 6,
+              padding: "4px 8px", cursor: "pointer",
+            }}>Copy</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Settings */}
+      <div style={{ margin: "0 16px 12px", background: t.surface, borderRadius: 14, border: `1px solid ${t.border}`, overflow: "hidden" }}>
+        {[
+          { label: "Edit display name", chevron: true },
+          { label: "Notifications", chevron: true },
+        ].map((row, i, arr) => (
+          <div key={row.label} style={{
+            padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between",
+            borderBottom: i < arr.length - 1 ? `1px solid ${t.border}` : "none",
+          }}>
+            <span style={{ fontSize: 15, color: t.text, fontFamily: t.fontBody }}>{row.label}</span>
+            {row.chevron && (
+              <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
+                <path d="M1 1l5 5-5 5" stroke={t.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Sign out */}
+      <div style={{ margin: "0 16px" }}>
+        <button style={{
+          width: "100%", padding: "14px 16px",
+          background: t.surface, borderRadius: 14, border: `1px solid ${t.border}`,
+          color: "#C0392B", fontSize: 15, fontWeight: 500, fontFamily: t.fontBody,
+          cursor: "pointer", textAlign: "left",
+        }}>Sign out</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Check-in Screen ──────────────────────────────────────────
+function CheckinScreen({ t, goal, onBack }) {
+  const [note, setNote] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  if (submitted) {
+    return (
+      <div style={{ background: t.bg, minHeight: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: "0 32px" }}>
+        <div style={{ width: 56, height: 56, borderRadius: "50%", background: t.successLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <CheckIcon color={t.success} size={22} />
+        </div>
+        <p style={{ fontSize: 20, fontFamily: t.fontDisplay, color: t.text, textAlign: "center", fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>Logged</p>
+        <p style={{ fontSize: 14, color: t.muted, fontFamily: t.fontBody, textAlign: "center" }}>{goal?.title}</p>
+        <button onClick={onBack} style={{ marginTop: 8, fontSize: 14, color: t.accent, fontFamily: t.fontBody, background: "none", border: "none", cursor: "pointer" }}>
+          Back to home
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: t.bg, minHeight: "100%", paddingBottom: 80 }}>
+      <div style={{ padding: "16px 20px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: t.muted, fontSize: 14, fontFamily: t.fontBody, padding: 0 }}>← Back</button>
+      </div>
+
+      <div style={{ padding: "0 20px" }}>
+        <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: t.muted, textTransform: "uppercase", fontFamily: t.fontBody, marginBottom: 6 }}>Logging</p>
+        <h2 style={{ fontFamily: t.fontDisplay, fontSize: 22, color: t.text, fontWeight: 400, marginBottom: 24, fontStyle: t.fontDisplay.includes("Instrument") || t.fontDisplay.includes("Playfair") ? "italic" : "normal" }}>{goal?.title ?? "Check-in"}</h2>
+
+        {/* Photo area */}
+        <div style={{
+          width: "100%", aspectRatio: "4/3", borderRadius: 16,
+          border: `1.5px dashed ${t.border}`,
+          background: t.surface,
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 8, marginBottom: 20, cursor: "pointer",
+        }}>
+          <svg width="28" height="24" viewBox="0 0 28 24" fill="none">
+            <path d="M2 20V8a2 2 0 012-2h2l2-3h8l2 3h2a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2z" stroke={t.muted} strokeWidth="1.5" fill="none" />
+            <circle cx="14" cy="13" r="4" stroke={t.muted} strokeWidth="1.5" fill="none" />
+          </svg>
+          <span style={{ fontSize: 13, color: t.muted, fontFamily: t.fontBody }}>Add a photo</span>
+        </div>
+
+        {/* Note */}
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 12, fontWeight: 500, color: t.muted, fontFamily: t.fontBody, marginBottom: 8 }}>Note (optional)</p>
+          <textarea
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="How did it go?"
+            rows={3}
+            style={{
+              width: "100%", padding: "12px 14px",
+              border: `1.5px solid ${t.border}`, borderRadius: 12,
+              background: t.surface, color: t.text,
+              fontSize: 14, fontFamily: t.fontBody,
+              resize: "none", outline: "none",
+            }}
+          />
+        </div>
+
+        {/* Submit */}
+        <button onClick={() => setSubmitted(true)} style={{
+          width: "100%", padding: "15px",
+          background: t.accent, color: "#fff",
+          border: "none", borderRadius: 14,
+          fontSize: 15, fontWeight: 600, fontFamily: t.fontBody,
+          cursor: "pointer",
+        }}>
+          Log check-in
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Bottom Nav ───────────────────────────────────────────────
+function BottomNav({ active, onChange, t }) {
+  const tabs = [
+    { key: "home", label: "Home", icon: (active) => (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <path d="M2 9L11 2L20 9V20H14V14H8V20H2V9Z" stroke="currentColor" strokeWidth={active ? 2 : 1.5} fill={active ? "currentColor" : "none"} strokeLinejoin="round" />
+      </svg>
+    )},
+    { key: "goals", label: "Goals", icon: (active) => (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="11" r="9" stroke="currentColor" strokeWidth={active ? 2 : 1.5} />
+        <circle cx="11" cy="11" r="5" stroke="currentColor" strokeWidth={active ? 2 : 1.5} />
+        <circle cx="11" cy="11" r="1.5" fill="currentColor" />
+      </svg>
+    )},
+    { key: "journal", label: "Journal", icon: (active) => (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <rect x="3" y="2" width="16" height="18" rx="2" stroke="currentColor" strokeWidth={active ? 2 : 1.5} fill={active ? "currentColor" : "none"} fillOpacity="0.1" />
+        <path d="M7 8H15M7 12H13" stroke={active ? "#fff" : "currentColor"} strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    )},
+    { key: "profile", label: "Profile", icon: (active) => (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <circle cx="11" cy="8" r="4" stroke="currentColor" strokeWidth={active ? 2 : 1.5} fill={active ? "currentColor" : "none"} fillOpacity="0.15" />
+        <path d="M3 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth={active ? 2 : 1.5} strokeLinecap="round" />
+      </svg>
+    )},
+  ];
+
+  return (
+    <div style={{
+      position: "absolute", bottom: 0, left: 0, right: 0,
+      background: t.navBg,
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      borderTop: `1px solid ${t.border}`,
+      display: "flex",
+      paddingBottom: 16,
+      zIndex: 100,
+    }}>
+      {tabs.map(tab => {
+        const isActive = active === tab.key;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            style={{
+              flex: 1, border: "none", background: "transparent",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 3, padding: "10px 0 0", cursor: "pointer",
+              color: isActive ? t.accent : t.muted,
+              transition: "color 0.15s",
+            }}
+          >
+            {tab.icon(isActive)}
+            <span style={{ fontSize: 10, fontWeight: 600, fontFamily: t.fontBody, letterSpacing: "0.02em" }}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── App ──────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "linen"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [activeTab, setActiveTab] = useState("home");
+  const [checkinGoal, setCheckinGoal] = useState(null);
+  const [tweaksVisible, setTweaksVisible] = useState(false);
+  const [theme, setTheme] = useState(TWEAK_DEFAULTS.theme);
+
+  const t = THEMES[theme] || THEMES.linen;
+
+  // Tweaks protocol
+  React.useEffect(() => {
+    window.addEventListener("message", e => {
+      if (e.data?.type === "__activate_edit_mode") setTweaksVisible(true);
+      if (e.data?.type === "__deactivate_edit_mode") setTweaksVisible(false);
+    });
+    window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+  }, []);
+
+  const setAndPersistTheme = (key) => {
+    setTheme(key);
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: { theme: key } }, "*");
+  };
+
+  const handleCheckin = (goal) => {
+    setCheckinGoal(goal);
+    setActiveTab("checkin");
+  };
+
+  const handleBack = () => {
+    setCheckinGoal(null);
+    setActiveTab("home");
+  };
+
+  const renderScreen = () => {
+    if (activeTab === "checkin") return <CheckinScreen t={t} goal={checkinGoal} onBack={handleBack} />;
+    if (activeTab === "home") return <HomeScreen t={t} onCheckin={handleCheckin} />;
+    if (activeTab === "goals") return <GoalsScreen t={t} onCheckin={handleCheckin} />;
+    if (activeTab === "journal") return <JournalScreen t={t} />;
+    if (activeTab === "profile") return <ProfileScreen t={t} />;
+  };
+
+  return (
+    <>
+      {/* Canvas */}
+      <div style={{ display: "flex", gap: 60, alignItems: "flex-start", padding: "40px 60px" }}>
+        {/* Phone */}
+        <IOSDevice width={390} height={844}>
+          <div style={{ position: "relative", height: "100%", background: t.bg }}>
+            <div style={{ position: "absolute", inset: 0, overflowY: "auto", paddingTop: 54 }}>
+              {renderScreen()}
+            </div>
+            {activeTab !== "checkin" && (
+              <BottomNav active={activeTab} onChange={setActiveTab} t={t} />
+            )}
+          </div>
+        </IOSDevice>
+
+        {/* Labels */}
+        <div style={{ paddingTop: 80, display: "flex", flexDirection: "column", gap: 8 }}>
+          <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>Theme</p>
+          {Object.entries(THEMES).map(([key, th]) => (
+            <button key={key} onClick={() => setAndPersistTheme(key)} style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 14px", borderRadius: 10,
+              background: theme === key ? "rgba(255,255,255,0.12)" : "transparent",
+              border: `1px solid ${theme === key ? "rgba(255,255,255,0.2)" : "transparent"}`,
+              color: theme === key ? "#fff" : "rgba(255,255,255,0.45)",
+              fontSize: 13, fontFamily: "'DM Sans', sans-serif", fontWeight: 500,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+            }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", background: th.accent, flexShrink: 0 }} />
+              {th.name}
+            </button>
+          ))}
+
+          <div style={{ marginTop: 20, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 16 }}>
+            <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "'DM Sans', sans-serif", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Screens</p>
+            {[
+              { key: "home", label: "Home" },
+              { key: "goals", label: "Goals" },
+              { key: "journal", label: "Journal" },
+              { key: "profile", label: "Profile" },
+            ].map(s => (
+              <button key={s.key} onClick={() => setActiveTab(s.key)} style={{
+                display: "block", width: "100%",
+                padding: "7px 14px", borderRadius: 8,
+                background: activeTab === s.key ? "rgba(255,255,255,0.1)" : "transparent",
+                border: "none",
+                color: activeTab === s.key ? "#fff" : "rgba(255,255,255,0.4)",
+                fontSize: 13, fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer", textAlign: "left",
+                transition: "all 0.15s",
+              }}>{s.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Tweaks panel */}
+      <div className={`tweaks-panel ${tweaksVisible ? "visible" : ""}`}>
+        <p className="tweaks-title">Tweaks</p>
+        <div className="tweak-row">
+          <p className="tweak-label">Theme</p>
+          {Object.entries(THEMES).map(([key, th]) => (
+            <button key={key} className={`theme-btn ${theme === key ? "active" : ""}`} onClick={() => setAndPersistTheme(key)}>
+              <div className="theme-swatch" style={{ background: th.accent }} />
+              {th.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

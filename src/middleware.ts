@@ -25,19 +25,24 @@ export async function middleware(request: NextRequest) {
     }
   );
 
+  // Verify the JWT locally for the routing decision instead of calling the auth
+  // server on every navigation (getUser() is a network round-trip). getClaims()
+  // validates the token signature locally and only hits the network to fetch the
+  // signing keys once (cached thereafter).
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: claims,
+  } = await supabase.auth.getClaims();
+  const isAuthed = Boolean(claims?.claims?.sub);
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/welcome") ||
     request.nextUrl.pathname.startsWith("/onboard") ||
     request.nextUrl.pathname === "/";
 
-  if (!user && !isAuthRoute) {
+  if (!isAuthed && !isAuthRoute) {
     return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
-  if (user && request.nextUrl.pathname === "/") {
+  if (isAuthed && request.nextUrl.pathname === "/") {
     return NextResponse.redirect(new URL("/home", request.url));
   }
 
@@ -46,6 +51,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|workbox-.*\\.js).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|workbox-.*\\.js|apple-touch-icon\\.png).*)",
   ],
 };

@@ -1,26 +1,35 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import { Instrument_Serif, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const nunito = Nunito({
+const instrumentSerif = Instrument_Serif({
   subsets: ["latin"],
-  variable: "--font-nunito",
+  weight: ["400"],
+  style: ["italic"],
+  variable: "--font-instrument-serif",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-dm-sans",
 });
 
 export const metadata: Metadata = {
-  title: "Together",
+  title: "CheckMate",
   description: "Track your goals together",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Together",
+    title: "CheckMate",
+    startupImage: [],
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fffaf7",
+  themeColor: "#F8F4F0",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -33,8 +42,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${nunito.variable} h-full`}>
-      <body className="h-full bg-[#fffaf7] font-[family-name:var(--font-nunito)]">
+    <html lang="en" className={`${instrumentSerif.variable} ${dmSans.variable} h-full`}>
+      <head>
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+      </head>
+      <body className="h-full bg-[--background] font-[family-name:var(--font-dm-sans)]">
         <Providers>{children}</Providers>
       </body>
     </html>

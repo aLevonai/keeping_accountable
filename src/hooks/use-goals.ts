@@ -36,11 +36,49 @@ export function useGoals(coupleId: string | null | undefined) {
     if (!coupleId) return;
 
     const channel = supabase
-      .channel("goals-realtime")
+      .channel(`goals-realtime-${coupleId}`)
+      // Goals change rarely — filter to this couple and do a full reload.
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "goals", filter: `couple_id=eq.${coupleId}` },
+        () => load()
+      )
+      // Completions have no couple_id to filter on, so subscribe broadly but
+      // patch local state from the payload — and ignore events for goals that
+      // aren't ours — instead of reloading everything on every check-in.
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "completions" },
-        () => load()
+        (payload) => {
+          setGoals((prev) => {
+            const goalIds = new Set(prev.map((g) => g.id));
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as CompletionRow;
+              if (!goalIds.has(row.goal_id)) return prev;
+              return prev.map((g) =>
+                g.id === row.goal_id ? { ...g, completions: [...g.completions, row] } : g
+              );
+            }
+            if (payload.eventType === "UPDATE") {
+              const row = payload.new as CompletionRow;
+              if (!goalIds.has(row.goal_id)) return prev;
+              return prev.map((g) =>
+                g.id === row.goal_id
+                  ? { ...g, completions: g.completions.map((c) => (c.id === row.id ? row : c)) }
+                  : g
+              );
+            }
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<CompletionRow>;
+              if (!oldRow.id) return prev;
+              return prev.map((g) => ({
+                ...g,
+                completions: g.completions.filter((c) => c.id !== oldRow.id),
+              }));
+            }
+            return prev;
+          });
+        }
       )
       .subscribe();
 
