@@ -9,6 +9,7 @@ import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { countCompletionsInPeriod, getPeriodLabel, calculateStreak, getStreakHistory, getPeriodRange } from "@/utils/period";
 import type { Cadence } from "@/types/database";
 import { getSignedPhotoUrls, uploadPhoto } from "@/utils/storage";
+import { compressImage } from "@/utils/image";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Camera, Pencil, ImagePlus } from "lucide-react";
 import { GoalDetailSkeleton } from "@/components/ui/page-skeleton";
@@ -230,17 +231,30 @@ export default function GoalDetailPage() {
 
   async function handleChangePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !pendingMediaId.current || !pendingCompletionId.current || !user || !couple) return;
-    setChangingPhotoId(pendingMediaId.current);
+    if (!file || pendingMediaId.current === null || pendingCompletionId.current === null || !user || !couple) return;
+    const mediaId = pendingMediaId.current; // "" = insert new, non-empty = update existing
+    setChangingPhotoId(mediaId || pendingCompletionId.current);
     try {
-      const newPath = await uploadPhoto(file, couple.id, user.id, pendingCompletionId.current);
-      await supabase
-        .from("completion_media")
-        .update({ storage_path: newPath })
-        .eq("id", pendingMediaId.current);
+      const [compressed, thumbnail] = await Promise.all([
+        compressImage(file),
+        compressImage(file, 600, 0.72),
+      ]);
+      const newPath = await uploadPhoto(compressed, couple.id, user.id, pendingCompletionId.current, thumbnail);
+      if (mediaId) {
+        await supabase
+          .from("completion_media")
+          .update({ storage_path: newPath })
+          .eq("id", mediaId);
+      } else {
+        await supabase.from("completion_media").insert({
+          completion_id: pendingCompletionId.current,
+          storage_path: newPath,
+          media_type: "photo",
+        });
+      }
       await load();
     } catch {
-      // Upload failed — keep existing photo
+      // Upload failed — keep existing state
     } finally {
       setChangingPhotoId(null);
       pendingMediaId.current = null;

@@ -203,7 +203,7 @@ export default function EditGoalPage() {
           <button
             type="button"
             onClick={() => setIsShared(!isShared)}
-            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--primary]" : "bg-[--border]"}`}
+            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : "translate-x-0.5"}`} />
           </button>
@@ -271,7 +271,7 @@ export default function EditGoalPage() {
               <button
                 type="button"
                 onClick={() => setRemEnabled(!remEnabled)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--primary]" : "bg-[--border]"}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>

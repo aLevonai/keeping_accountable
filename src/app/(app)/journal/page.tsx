@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
-import { getSignedPhotoUrls } from "@/utils/storage";
+import { getSignedPhotoUrlsWithThumbs } from "@/utils/storage";
 import { format } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
 import { Trash2, ImageOff } from "lucide-react";
@@ -102,14 +102,16 @@ function PolaroidCard({
   entry,
   index,
   isOwn,
-  photoUrl,
+  thumbUrl,
+  fullUrl,
   onRemovePhoto,
   onDeleteEntry,
 }: {
   entry: JournalEntry;
   index: number;
   isOwn: boolean;
-  photoUrl?: string;
+  thumbUrl?: string;
+  fullUrl?: string;
   onRemovePhoto: (entry: JournalEntry) => void;
   onDeleteEntry: (entry: JournalEntry) => void;
 }) {
@@ -120,6 +122,7 @@ function PolaroidCard({
   const tapeAngle = (index % 3 === 0) ? -4 : (index % 3 === 1) ? 3 : -2;
 
   const photo = entry.completion_media?.[0];
+  const photoSrc = thumbUrl ?? fullUrl;
   const name = entry.users?.display_name ?? "Someone";
   const dayLabel = format(new Date(entry.completed_at), "EEE");
   const goalTitle = entry.goals?.title ?? "Goal";
@@ -136,14 +139,17 @@ function PolaroidCard({
 
       {/* Photo area */}
       <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
-        {photo && photoUrl ? (
+        {photo && photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={photoUrl}
+            src={photoSrc}
             alt="Check-in"
             loading="lazy"
             decoding="async"
             className="w-full h-full object-cover"
+            onError={thumbUrl && fullUrl ? (e) => {
+              if (e.currentTarget.src !== fullUrl) e.currentTarget.src = fullUrl;
+            } : undefined}
           />
         ) : (
           <div
@@ -197,7 +203,8 @@ export default function JournalPage() {
   const { user } = useAuth();
   const { couple } = useAppData();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
+  const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 
@@ -213,7 +220,9 @@ export default function JournalPage() {
     const list = (data ?? []) as unknown as JournalEntry[];
     setEntries(list);
     const paths = list.flatMap((e) => e.completion_media?.map((m) => m.storage_path) ?? []);
-    setPhotoUrls(await getSignedPhotoUrls(paths));
+    const { thumbs, fulls } = await getSignedPhotoUrlsWithThumbs(paths);
+    setThumbUrls(thumbs);
+    setFullUrls(fulls);
     setLoading(false);
   }, [couple?.id]);
 
@@ -267,7 +276,8 @@ export default function JournalPage() {
                 entry={entry}
                 index={i * 2}
                 isOwn={entry.user_id === user?.id}
-                photoUrl={entry.completion_media?.[0] ? photoUrls[entry.completion_media[0].storage_path] : undefined}
+                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
+                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
                 onRemovePhoto={handleRemovePhoto}
                 onDeleteEntry={handleDeleteEntry}
               />
@@ -281,7 +291,8 @@ export default function JournalPage() {
                 entry={entry}
                 index={i * 2 + 1}
                 isOwn={entry.user_id === user?.id}
-                photoUrl={entry.completion_media?.[0] ? photoUrls[entry.completion_media[0].storage_path] : undefined}
+                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
+                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
                 onRemovePhoto={handleRemovePhoto}
                 onDeleteEntry={handleDeleteEntry}
               />

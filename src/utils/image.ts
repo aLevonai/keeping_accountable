@@ -4,10 +4,10 @@
 // original file if the image can't be decoded (e.g. unsupported format).
 
 export async function compressImage(
-  file: File,
-  maxDim = 1600,
-  quality = 0.8
-): Promise<File | Blob> {
+  file: File | Blob,
+  maxDim = 1200,
+  quality = 0.82
+): Promise<Blob> {
   if (typeof document === "undefined") return file;
   if (!file.type.startsWith("image/")) return file;
 

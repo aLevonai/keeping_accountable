@@ -51,7 +51,7 @@ export default function NewGoalPage() {
     if (!couple || !user) return;
     setLoading(true);
 
-    const { data: created } = await supabase.from("goals").insert({
+    const { data: created, error: createError } = await supabase.from("goals").insert({
       couple_id: couple.id,
       owner_id: isShared ? null : user.id,
       is_joint: isShared ? isJoint : false,
@@ -63,7 +63,13 @@ export default function NewGoalPage() {
       starts_on: new Date().toISOString().split("T")[0],
     }).select("id").single();
 
-    if (created && remEnabled && cadence !== "once") {
+    if (createError || !created) {
+      setLoading(false);
+      alert("Failed to create goal. Please try again.");
+      return;
+    }
+
+    if (remEnabled && cadence !== "once") {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const hour24 = (remHour12 % 12) + (remAmpm === "PM" ? 12 : 0);
       await supabase.from("goal_reminders").insert({
@@ -153,7 +159,7 @@ export default function NewGoalPage() {
           <button
             type="button"
             onClick={() => setIsShared(!isShared)}
-            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--primary]" : "bg-[--border]"}`}
+            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
           >
             <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : "translate-x-0.5"}`} />
           </button>
@@ -221,7 +227,7 @@ export default function NewGoalPage() {
               <button
                 type="button"
                 onClick={() => setRemEnabled(!remEnabled)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--primary]" : "bg-[--border]"}`}
+                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>

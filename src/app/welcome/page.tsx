@@ -166,17 +166,17 @@ export default function WelcomePage() {
             <form onSubmit={handleVerifyCode} className="flex flex-col gap-3">
               <div>
                 <label className="block text-[12px] font-medium text-[--muted] mb-1.5">
-                  8-digit code
+                  6-digit code
                 </label>
                 <input
                   type="text"
                   inputMode="numeric"
-                  placeholder="12345678"
+                  placeholder="123456"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   required
                   autoFocus
-                  maxLength={8}
+                  maxLength={6}
                   className="w-full px-4 py-3.5 border border-[--border] rounded-2xl bg-[--surface] text-center text-[22px] font-semibold tracking-[0.18em] text-[--foreground] outline-none focus:border-[--primary]"
                 />
                 {error && <p className="text-[13px] text-red-500 mt-1.5">{error}</p>}
