@@ -10,6 +10,7 @@ import { generateInviteCode, inviteExpiry } from "@/utils/invite";
 import { compressImage } from "@/utils/image";
 import { getSignedPhotoUrl, thumbPath } from "@/utils/storage";
 import { ChevronRight } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 function getPartnerInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase();
@@ -274,13 +275,7 @@ export default function ProfilePage() {
                 )}
               </div>
               {!permissionDenied && (
-                <button
-                  onClick={subscribed ? unsubscribe : subscribe}
-                  disabled={pushLoading}
-                  className={`w-10 h-5 rounded-full relative transition-colors flex-shrink-0 ${subscribed ? "bg-[--success]" : "bg-[#B8AFA7]"} disabled:opacity-50`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${subscribed ? "translate-x-5" : "translate-x-0.5"}`} />
-                </button>
+                <Toggle checked={subscribed} onChange={subscribed ? unsubscribe : subscribe} disabled={pushLoading} />
               )}
             </div>
           </>

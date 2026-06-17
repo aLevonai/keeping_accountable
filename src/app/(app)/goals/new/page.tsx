@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import type { Cadence } from "@/types/database";
 import { ArrowLeft, Bell } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 const CADENCES: { value: Cadence; label: string }[] = [
   { value: "daily", label: "Daily" },
@@ -156,13 +157,7 @@ export default function NewGoalPage() {
             <p className="text-[14px] font-medium text-[--foreground]">Shared goal</p>
             <p className="text-[12px] text-[--muted]">Both of you can see and check in</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsShared(!isShared)}
-            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
-          >
-            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : "translate-x-0.5"}`} />
-          </button>
+          <Toggle checked={isShared} onChange={() => setIsShared(!isShared)} />
         </div>
 
         {/* Joint vs individual — only shown when shared is on */}
@@ -224,13 +219,7 @@ export default function NewGoalPage() {
                   <p className="text-[12px] text-[--muted]">Push notification if not done yet</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setRemEnabled(!remEnabled)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${remEnabled ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${remEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
-              </button>
+              <Toggle checked={remEnabled} onChange={() => setRemEnabled(!remEnabled)} />
             </div>
 
             {remEnabled && (

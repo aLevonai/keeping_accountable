@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { ArrowLeft } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 export default function NewDreamPage() {
   const router = useRouter();
@@ -81,13 +82,7 @@ export default function NewDreamPage() {
             <p className="text-[14px] font-medium text-[--foreground]">Shared dream</p>
             <p className="text-[12px] text-[--muted]">Both of you can see it</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsShared(!isShared)}
-            className={`w-10 h-5 rounded-full relative transition-colors ${isShared ? "bg-[--success]" : "bg-[#B8AFA7]"}`}
-          >
-            <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isShared ? "translate-x-5" : "translate-x-0.5"}`} />
-          </button>
+          <Toggle checked={isShared} onChange={() => setIsShared(!isShared)} />
         </div>
 
         <button
