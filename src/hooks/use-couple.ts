@@ -28,6 +28,7 @@ export function useCouple(userId: string | undefined): CoupleContext {
     }
 
     async function load() {
+
       const [{ data: selfData }, { data: memberData }] = await Promise.all([
         supabase.from("users").select("*").eq("id", userId!).single(),
         supabase
@@ -68,6 +69,15 @@ export function useCouple(userId: string | undefined): CoupleContext {
     }
 
     load();
+
+    // Re-load when a new member joins any couple — handles the "waiting for
+    // partner" screen updating automatically when the partner accepts an invite.
+    const channel = supabase
+      .channel(`couple-members:${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "couple_members" }, () => load())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
   return state;

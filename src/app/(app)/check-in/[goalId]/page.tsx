@@ -86,8 +86,11 @@ export default function CheckInPage() {
     void (async () => {
       if (photo) {
         try {
-          const compressed = await compressImage(photo);
-          const path = await uploadPhoto(compressed, couple.id, user.id, completion.id);
+          const [compressed, thumbnail] = await Promise.all([
+            compressImage(photo),
+            compressImage(photo, 600, 0.72),
+          ]);
+          const path = await uploadPhoto(compressed, couple.id, user.id, completion.id, thumbnail as Blob);
           await supabase.from("completion_media").insert({
             completion_id: completion.id,
             storage_path: path,

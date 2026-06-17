@@ -7,6 +7,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { usePush } from "@/hooks/use-push";
 import { generateInviteCode, inviteExpiry } from "@/utils/invite";
+import { compressImage } from "@/utils/image";
+import { getSignedPhotoUrl, thumbPath } from "@/utils/storage";
 import { ChevronRight } from "lucide-react";
 
 function getPartnerInitial(name: string): string {
@@ -36,6 +38,13 @@ export default function ProfilePage() {
   const [regenerating, setRegenerating] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ done: number; total: number } | null>(null);
+  const [backfillDone, setBackfillDone] = useState(false);
+
+  useEffect(() => {
+    setBackfillDone(localStorage.getItem("thumbs_backfilled") === "1");
+  }, []);
 
   useEffect(() => {
     if (self) setDisplayName(self.display_name);
@@ -106,6 +115,33 @@ export default function ProfilePage() {
     await navigator.clipboard.writeText(inviteCode).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleBackfill() {
+    setBackfilling(true);
+    // RLS ensures only this couple's media rows are returned
+    const { data } = await supabase.from("completion_media").select("storage_path");
+    const paths = (data ?? []).map((d) => d.storage_path as string);
+    setBackfillProgress({ done: 0, total: paths.length });
+
+    for (let i = 0; i < paths.length; i++) {
+      try {
+        const signedUrl = await getSignedPhotoUrl(paths[i]);
+        if (signedUrl) {
+          const res = await fetch(signedUrl);
+          const blob = await res.blob();
+          const thumbnail = await compressImage(blob, 600, 0.72);
+          await supabase.storage.from("media").upload(thumbPath(paths[i]), thumbnail, { upsert: true });
+        }
+      } catch {
+        // skip failed photos, keep going
+      }
+      setBackfillProgress({ done: i + 1, total: paths.length });
+    }
+
+    localStorage.setItem("thumbs_backfilled", "1");
+    setBackfillDone(true);
+    setBackfilling(false);
   }
 
   const selfName = self?.display_name ?? "You";
@@ -241,7 +277,7 @@ export default function ProfilePage() {
                 <button
                   onClick={subscribed ? unsubscribe : subscribe}
                   disabled={pushLoading}
-                  className={`w-10 h-5 rounded-full relative transition-colors flex-shrink-0 ${subscribed ? "bg-[--primary]" : "bg-[--border]"} disabled:opacity-50`}
+                  className={`w-10 h-5 rounded-full relative transition-colors flex-shrink-0 ${subscribed ? "bg-[--success]" : "bg-[#B8AFA7]"} disabled:opacity-50`}
                 >
                   <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${subscribed ? "translate-x-5" : "translate-x-0.5"}`} />
                 </button>
@@ -250,6 +286,29 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+
+      {/* Photo thumbnail backfill — shown until the user runs it once per device */}
+      {!backfillDone && (
+        <div className="bg-[--surface] rounded-2xl border border-[--border] mb-4 overflow-hidden">
+          <div className="px-4 py-3.5 flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[15px] text-[--foreground]">Speed up journal photos</p>
+              <p className="text-[11px] text-[--muted] mt-0.5">
+                {backfilling && backfillProgress
+                  ? `${backfillProgress.done} / ${backfillProgress.total} processed…`
+                  : "Generate thumbnails for faster loading"}
+              </p>
+            </div>
+            <button
+              onClick={handleBackfill}
+              disabled={backfilling}
+              className="flex-shrink-0 px-3 py-1.5 bg-[--primary-light] text-[--primary] text-[12px] font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition-transform"
+            >
+              {backfilling ? "Running…" : "Run"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Danger zone */}
       <div className="bg-[--surface] rounded-2xl border border-[--border] overflow-hidden mb-4">
