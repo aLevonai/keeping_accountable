@@ -42,10 +42,18 @@ export default function ProfilePage() {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillProgress, setBackfillProgress] = useState<{ done: number; total: number } | null>(null);
   const [backfillDone, setBackfillDone] = useState(false);
+  const [journalLayout, setJournalLayout] = useState<"classic" | "canvas">("canvas");
 
   useEffect(() => {
     setBackfillDone(localStorage.getItem("thumbs_backfilled") === "1");
+    const saved = localStorage.getItem("journal_layout");
+    if (saved === "classic" || saved === "canvas") setJournalLayout(saved);
   }, []);
+
+  function chooseJournalLayout(value: "classic" | "canvas") {
+    setJournalLayout(value);
+    localStorage.setItem("journal_layout", value);
+  }
 
   useEffect(() => {
     if (self) setDisplayName(self.display_name);
@@ -280,6 +288,37 @@ export default function ProfilePage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Journal view preference */}
+      <div className="bg-[--surface] rounded-2xl border border-[--border] mb-4 overflow-hidden">
+        <div className="px-4 py-3.5">
+          <p className="text-[15px] text-[--foreground]">Journal view</p>
+          <p className="text-[11px] text-[--muted] mt-0.5">
+            {journalLayout === "canvas"
+              ? "Scattered corkboard — drag around and pinch to zoom"
+              : "Classic two-column scroll"}
+          </p>
+          <div className="flex gap-2 mt-3">
+            {([
+              { value: "classic", label: "Classic" },
+              { value: "canvas", label: "Canvas" },
+            ] as const).map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => chooseJournalLayout(value)}
+                className="flex-1 px-3 py-2 rounded-xl text-[13px] font-medium border transition-colors duration-150"
+                style={{
+                  background: journalLayout === value ? "var(--primary)" : "var(--surface)",
+                  borderColor: journalLayout === value ? "var(--primary)" : "var(--border)",
+                  color: journalLayout === value ? "#fff" : "var(--muted)",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Photo thumbnail backfill — shown until the user runs it once per device */}

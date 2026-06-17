@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { getSignedPhotoUrlsWithThumbs } from "@/utils/storage";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
 import { Trash2, ImageOff } from "lucide-react";
 
@@ -19,46 +19,66 @@ interface JournalEntry {
   completion_media: { id: string; storage_path: string }[];
 }
 
+type PersonFilter = "all" | "me" | "partner";
+type TimeFilter = "all" | "thisMonth" | "lastMonth" | "thisYear";
+type Layout = "classic" | "canvas";
+
+// --- Canvas layout constants ---
+const CARD_W = 150;
+const H_GAP = 20;
+const V_GAP = 38;
+const COLS = 3;
+const PAD = 20;
+// Approximate card footprint: image (~150) + caption (~56) + tape/padding (~36)
+const ROW_H = 242;
+const PAN_MARGIN = 90; // keep at least this many px of board on screen
+
+// Seeded LCG so each card's scatter is stable across re-renders
+function seededRand(seed: number): number {
+  return ((seed * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff;
+}
+
+function cardPos(index: number) {
+  const col = index % COLS;
+  const row = Math.floor(index / COLS);
+  const nx = (seededRand(index * 7 + 1) - 0.5) * 46;
+  const ny = (seededRand(index * 7 + 3) - 0.5) * 26;
+  return {
+    x: PAD + col * (CARD_W + H_GAP) + nx,
+    y: PAD + row * (ROW_H + V_GAP) + ny + 12,
+  };
+}
+
+// --- Visual variety ---
 const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
 const ASPECTS = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
 const GRAD_BG = [
-  "linear-gradient(135deg, #f5e6d8 0%, #e8d5c4 100%)",
-  "linear-gradient(135deg, #dce8f0 0%, #c8dce8 100%)",
-  "linear-gradient(135deg, #e8e4f0 0%, #d8d2e8 100%)",
-  "linear-gradient(135deg, #d8ece0 0%, #c8e0d0 100%)",
-  "linear-gradient(135deg, #f0ece0 0%, #e4dcc8 100%)",
-  "linear-gradient(135deg, #ece0e8 0%, #dcc8d8 100%)",
+  "linear-gradient(135deg,#f5e6d8 0%,#e8d5c4 100%)",
+  "linear-gradient(135deg,#dce8f0 0%,#c8dce8 100%)",
+  "linear-gradient(135deg,#e8e4f0 0%,#d8d2e8 100%)",
+  "linear-gradient(135deg,#d8ece0 0%,#c8e0d0 100%)",
+  "linear-gradient(135deg,#f0ece0 0%,#e4dcc8 100%)",
+  "linear-gradient(135deg,#ece0e8 0%,#dcc8d8 100%)",
 ];
 
-function isRTL(text: string): boolean {
+function isRTL(text: string) {
   return /[֐-׿؀-ۿ]/.test(text[0] ?? "");
 }
 
 function TapeStrip({ angle = 0 }: { angle?: number }) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: -8,
-        left: "50%",
-        transform: `translateX(-50%) rotate(${angle}deg)`,
-        width: 44,
-        height: 18,
-        background: "rgba(255,230,180,0.55)",
-        borderRadius: 2,
-        zIndex: 2,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-      }}
-    />
+    <div style={{
+      position: "absolute", top: -8, left: "50%",
+      transform: `translateX(-50%) rotate(${angle}deg)`,
+      width: 44, height: 18,
+      background: "rgba(255,230,180,0.55)",
+      borderRadius: 2, zIndex: 2,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    }} />
   );
 }
 
-function DeleteMenu({
-  hasPhoto,
-  onRemovePhoto,
-  onDeleteEntry,
-  onClose,
-}: {
+function DeleteMenu({ hasPhoto, onRemovePhoto, onDeleteEntry, onClose }: {
   hasPhoto: boolean;
   onRemovePhoto: () => void;
   onDeleteEntry: () => void;
@@ -66,15 +86,11 @@ function DeleteMenu({
 }) {
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-      />
-      {/* Menu */}
+      <div className="fixed inset-0 z-40" onClick={onClose} />
       <div
         className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-white rounded-xl shadow-lg border border-[--border] overflow-hidden"
         style={{ minWidth: 160 }}
+        onPointerDown={e => e.stopPropagation()}
         onClick={e => e.stopPropagation()}
       >
         {hasPhoto && (
@@ -98,46 +114,39 @@ function DeleteMenu({
   );
 }
 
-function PolaroidCard({
-  entry,
-  index,
-  isOwn,
-  thumbUrl,
-  fullUrl,
-  onRemovePhoto,
-  onDeleteEntry,
-}: {
+function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, onRemovePhoto, onDeleteEntry }: {
   entry: JournalEntry;
   index: number;
   isOwn: boolean;
   thumbUrl?: string;
   fullUrl?: string;
-  onRemovePhoto: (entry: JournalEntry) => void;
-  onDeleteEntry: (entry: JournalEntry) => void;
+  width?: number; // fixed px in canvas mode; full-width in classic
+  onRemovePhoto: (e: JournalEntry) => void;
+  onDeleteEntry: (e: JournalEntry) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const rotation = ROTATIONS[index % ROTATIONS.length];
   const aspectClass = ASPECTS[index % ASPECTS.length];
   const gradBg = GRAD_BG[index % GRAD_BG.length];
-  const tapeAngle = (index % 3 === 0) ? -4 : (index % 3 === 1) ? 3 : -2;
+  const tapeAngle = index % 3 === 0 ? -4 : index % 3 === 1 ? 3 : -2;
 
   const photo = entry.completion_media?.[0];
   const photoSrc = thumbUrl ?? fullUrl;
   const name = entry.users?.display_name ?? "Someone";
-  const dayLabel = format(new Date(entry.completed_at), "EEE");
+  const dateLabel = format(new Date(entry.completed_at), "MMM d");
   const goalTitle = entry.goals?.title ?? "Goal";
 
   return (
     <div
       className="relative bg-white rounded-sm p-2 pb-7"
       style={{
-        boxShadow: "0 3px 12px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)",
+        width: width ?? "100%",
+        boxShadow: "0 3px 12px rgba(0,0,0,0.13),0 0 0 0.5px rgba(0,0,0,0.06)",
         transform: `rotate(${rotation}deg)`,
       }}
     >
       <TapeStrip angle={tapeAngle} />
 
-      {/* Photo area */}
       <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
         {photo && photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -152,33 +161,31 @@ function PolaroidCard({
             } : undefined}
           />
         ) : (
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{ background: gradBg }}
-          >
+          <div className="w-full h-full flex items-center justify-center" style={{ background: gradBg }}>
             <div className="w-8 h-8 rounded-full bg-white/30" />
           </div>
         )}
       </div>
 
-      {/* Caption */}
       <div className="pt-2 px-0.5">
         <p className="text-[10px] font-semibold text-[#666] uppercase tracking-[0.05em]">
-          {name} · {dayLabel}
+          {name} · {dateLabel}
         </p>
         <p className="text-[10px] text-[#999] mt-0.5 truncate">{goalTitle}</p>
         {entry.note && (
           <p
             className="text-[10px] italic text-[#777] mt-1 line-clamp-2"
             dir={isRTL(entry.note) ? "rtl" : "ltr"}
-          >&ldquo;{entry.note}&rdquo;</p>
+          >
+            &ldquo;{entry.note}&rdquo;
+          </p>
         )}
       </div>
 
-      {/* Delete button — only for own entries */}
       {isOwn && (
         <div className="relative">
           <button
+            onPointerDown={e => e.stopPropagation()}
             onClick={() => setMenuOpen(v => !v)}
             className="absolute bottom-0 right-0.5 w-6 h-6 flex items-center justify-center rounded-full bg-white/80 text-[#bbb] hover:text-[#888] transition-colors"
             style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
@@ -199,14 +206,34 @@ function PolaroidCard({
   );
 }
 
+// --- Page ---
 export default function JournalPage() {
   const { user } = useAuth();
-  const { couple } = useAppData();
+  const { couple, partner } = useAppData();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
+
+  // Layout preference (set on the Profile page, stored per-device)
+  const [layout, setLayout] = useState<Layout>("canvas");
+  useEffect(() => {
+    const saved = localStorage.getItem("journal_layout");
+    if (saved === "classic" || saved === "canvas") setLayout(saved);
+  }, []);
+
+  // Pan + zoom (canvas mode)
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(0.78);
+  const activePointers = useRef(new Map<number, { x: number; y: number }>());
+  const lastPanPos = useRef({ x: 0, y: 0 });
+  const lastPinchDist = useRef<number | null>(null);
+
+  // Filters
+  const [personFilter, setPersonFilter] = useState<PersonFilter>("all");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
 
   const load = useCallback(async () => {
     if (!couple) return;
@@ -226,9 +253,91 @@ export default function JournalPage() {
     setLoading(false);
   }, [couple?.id]);
 
+  useEffect(() => { load(); }, [load]);
+
+  // Reset pan when filters change so you always land back at the top-left
   useEffect(() => {
-    load();
-  }, [load]);
+    setOffset({ x: 0, y: 0 });
+  }, [personFilter, timeFilter]);
+
+  const filteredEntries = useMemo(() => {
+    let list = entries;
+    if (personFilter === "me") list = list.filter(e => e.user_id === user?.id);
+    else if (personFilter === "partner") list = list.filter(e => e.user_id !== user?.id);
+
+    const now = new Date();
+    if (timeFilter === "thisMonth") {
+      const start = startOfMonth(now);
+      list = list.filter(e => new Date(e.completed_at) >= start);
+    } else if (timeFilter === "lastMonth") {
+      const start = startOfMonth(subMonths(now, 1));
+      const end = endOfMonth(subMonths(now, 1));
+      list = list.filter(e => { const d = new Date(e.completed_at); return d >= start && d <= end; });
+    } else if (timeFilter === "thisYear") {
+      const start = startOfYear(now);
+      list = list.filter(e => new Date(e.completed_at) >= start);
+    }
+    return list;
+  }, [entries, personFilter, timeFilter, user?.id]);
+
+  const rows = Math.ceil(filteredEntries.length / COLS);
+  const canvasW = PAD * 2 + COLS * (CARD_W + H_GAP) + 60;
+  const canvasH = PAD * 2 + rows * (ROW_H + V_GAP) + 60;
+
+  // Keep the board from being dragged completely off-screen
+  const clampOffset = useCallback((x: number, y: number) => {
+    const el = canvasRef.current;
+    if (!el) return { x, y };
+    const vw = el.clientWidth, vh = el.clientHeight;
+    const sw = canvasW * scale, sh = canvasH * scale;
+    return {
+      x: Math.min(vw - PAN_MARGIN, Math.max(PAN_MARGIN - sw, x)),
+      y: Math.min(vh - PAN_MARGIN, Math.max(PAN_MARGIN - sh, y)),
+    };
+  }, [canvasW, canvasH, scale]);
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if ((e.target as HTMLElement).closest("button,a")) return;
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    lastPanPos.current = { x: e.clientX, y: e.clientY };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!activePointers.current.has(e.pointerId)) return;
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = Array.from(activePointers.current.values());
+
+    if (pts.length >= 2) {
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (lastPinchDist.current !== null) {
+        const ratio = dist / lastPinchDist.current;
+        setScale(s => Math.min(2.2, Math.max(0.3, s * ratio)));
+      }
+      lastPinchDist.current = dist;
+    } else {
+      const dx = e.clientX - lastPanPos.current.x;
+      const dy = e.clientY - lastPanPos.current.y;
+      setOffset(prev => clampOffset(prev.x + dx, prev.y + dy));
+      lastPanPos.current = { x: e.clientX, y: e.clientY };
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    activePointers.current.delete(e.pointerId);
+    if (activePointers.current.size < 2) lastPinchDist.current = null;
+    if (activePointers.current.size === 1) {
+      const remaining = Array.from(activePointers.current.values())[0];
+      lastPanPos.current = { x: remaining.x, y: remaining.y };
+    }
+  }
+
+  function onWheel(e: React.WheelEvent) {
+    // No scroll container here (overflow hidden), so no preventDefault needed —
+    // avoids the passive-listener console warning.
+    const factor = e.deltaY < 0 ? 1.08 : 0.93;
+    setScale(s => Math.min(2.2, Math.max(0.3, s * factor)));
+  }
 
   async function handleRemovePhoto(entry: JournalEntry) {
     const media = entry.completion_media?.[0];
@@ -243,60 +352,152 @@ export default function JournalPage() {
     load();
   }
 
-  if (loading) {
-    return <JournalSkeleton />;
+  if (loading) return <JournalSkeleton />;
+
+  const partnerName = partner?.display_name ?? "Partner";
+
+  const FilterBar = (
+    <div className="px-5 pt-3 pb-2 flex-shrink-0">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {(["all", "me", "partner"] as PersonFilter[]).map(f => (
+          <button
+            key={f}
+            onClick={() => setPersonFilter(f)}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium border transition-colors duration-150"
+            style={{
+              background: personFilter === f ? "var(--primary)" : "var(--surface)",
+              borderColor: personFilter === f ? "var(--primary)" : "var(--border)",
+              color: personFilter === f ? "#fff" : "var(--muted)",
+            }}
+          >
+            {f === "all" ? "Everyone" : f === "me" ? "You" : partnerName}
+          </button>
+        ))}
+        <div className="w-px self-stretch bg-[--border] flex-shrink-0 mx-0.5" />
+        {(["all", "thisMonth", "lastMonth", "thisYear"] as TimeFilter[]).map(f => (
+          <button
+            key={f}
+            onClick={() => setTimeFilter(f)}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium border transition-colors duration-150"
+            style={{
+              background: timeFilter === f ? "var(--primary)" : "var(--surface)",
+              borderColor: timeFilter === f ? "var(--primary)" : "var(--border)",
+              color: timeFilter === f ? "#fff" : "var(--muted)",
+            }}
+          >
+            {f === "all" ? "All time" : f === "thisMonth" ? "This month" : f === "lastMonth" ? "Last month" : "This year"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const Header = (
+    <div className="px-5 flex-shrink-0" style={{ paddingTop: "calc(56px + env(safe-area-inset-top))" }}>
+      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground] leading-none">
+        Journal
+      </h1>
+      {filteredEntries.length > 0 && (
+        <p className="text-[11px] text-[--muted] mt-0.5">{filteredEntries.length} memories</p>
+      )}
+    </div>
+  );
+
+  const emptyState = (
+    <div className="flex-1 flex items-center justify-center text-[--muted] text-[14px] px-8 text-center">
+      {entries.length === 0 ? "No check-ins yet. Complete a goal to see it here." : "No check-ins match these filters."}
+    </div>
+  );
+
+  // --- Classic: two-column scroll ---
+  if (layout === "classic") {
+    const leftEntries = filteredEntries.filter((_, i) => i % 2 === 0);
+    const rightEntries = filteredEntries.filter((_, i) => i % 2 !== 0);
+    return (
+      <div className="fixed inset-0 flex flex-col bg-[--background]" style={{ paddingBottom: "calc(62px + env(safe-area-inset-bottom))" }}>
+        {Header}
+        {FilterBar}
+        {filteredEntries.length === 0 ? emptyState : (
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
+            <div className="flex gap-2.5 px-4 pt-3 pb-8">
+              <div className="flex-1 flex flex-col gap-5">
+                {leftEntries.map((entry, i) => (
+                  <PolaroidCard
+                    key={entry.id}
+                    entry={entry}
+                    index={i * 2}
+                    isOwn={entry.user_id === user?.id}
+                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
+                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
+                    onRemovePhoto={handleRemovePhoto}
+                    onDeleteEntry={handleDeleteEntry}
+                  />
+                ))}
+              </div>
+              <div className="flex-1 flex flex-col gap-5 pt-8">
+                {rightEntries.map((entry, i) => (
+                  <PolaroidCard
+                    key={entry.id}
+                    entry={entry}
+                    index={i * 2 + 1}
+                    isOwn={entry.user_id === user?.id}
+                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
+                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
+                    onRemovePhoto={handleRemovePhoto}
+                    onDeleteEntry={handleDeleteEntry}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
   }
 
-  const monthLabel = entries.length > 0
-    ? format(new Date(entries[0].completed_at), "MMMM yyyy")
-    : format(new Date(), "MMMM yyyy");
-
-  const leftEntries = entries.filter((_, i) => i % 2 === 0);
-  const rightEntries = entries.filter((_, i) => i % 2 !== 0);
-
+  // --- Canvas: free pan + zoom corkboard ---
   return (
-    <div className="pb-8">
-      {/* Header */}
-      <div className="px-5 pt-14 pb-4">
-        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground]">Journal</h1>
-        <p className="text-[12px] text-[--muted] mt-0.5">{monthLabel}</p>
-      </div>
-
-      {entries.length === 0 ? (
-        <div className="text-center py-16 text-[--muted] text-sm px-5">
-          No check-ins yet. Complete a goal to see it here.
-        </div>
-      ) : (
-        <div className="flex gap-2.5 px-4 pt-3">
-          {/* Left column */}
-          <div className="flex-1 flex flex-col gap-5">
-            {leftEntries.map((entry, i) => (
-              <PolaroidCard
-                key={entry.id}
-                entry={entry}
-                index={i * 2}
-                isOwn={entry.user_id === user?.id}
-                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                onRemovePhoto={handleRemovePhoto}
-                onDeleteEntry={handleDeleteEntry}
-              />
-            ))}
-          </div>
-          {/* Right column (offset) */}
-          <div className="flex-1 flex flex-col gap-5 pt-8">
-            {rightEntries.map((entry, i) => (
-              <PolaroidCard
-                key={entry.id}
-                entry={entry}
-                index={i * 2 + 1}
-                isOwn={entry.user_id === user?.id}
-                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                onRemovePhoto={handleRemovePhoto}
-                onDeleteEntry={handleDeleteEntry}
-              />
-            ))}
+    <div className="fixed inset-0 flex flex-col bg-[--background]" style={{ paddingBottom: "calc(62px + env(safe-area-inset-bottom))" }}>
+      {Header}
+      {FilterBar}
+      {filteredEntries.length === 0 ? emptyState : (
+        <div
+          ref={canvasRef}
+          className="flex-1 overflow-hidden relative"
+          style={{ cursor: "grab", touchAction: "none" }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onWheel={onWheel}
+        >
+          <div
+            style={{
+              position: "absolute",
+              width: canvasW,
+              height: canvasH,
+              transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})`,
+              transformOrigin: "0 0",
+              willChange: "transform",
+            }}
+          >
+            {filteredEntries.map((entry, i) => {
+              const pos = cardPos(i);
+              return (
+                <div key={entry.id} style={{ position: "absolute", left: pos.x, top: pos.y }}>
+                  <PolaroidCard
+                    entry={entry}
+                    index={i}
+                    isOwn={entry.user_id === user?.id}
+                    width={CARD_W}
+                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
+                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
+                    onRemovePhoto={handleRemovePhoto}
+                    onDeleteEntry={handleDeleteEntry}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
