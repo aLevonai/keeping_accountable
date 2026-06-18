@@ -8,11 +8,12 @@ import { useAppData } from "@/contexts/app-data";
 import type { GoalWithCompletions } from "@/hooks/use-goals";
 import { countCompletionsInPeriod, getPeriodLabel, calculateStreak, getStreakHistory, getPeriodRange } from "@/utils/period";
 import type { Cadence } from "@/types/database";
-import { getSignedPhotoUrls, uploadPhoto } from "@/utils/storage";
+import { getSignedPhotoUrls, uploadPhoto, deletePhotos } from "@/utils/storage";
 import { compressImage } from "@/utils/image";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Camera, Pencil, ImagePlus } from "lucide-react";
 import { GoalDetailSkeleton } from "@/components/ui/page-skeleton";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { format } from "date-fns";
 
@@ -149,6 +150,7 @@ export default function GoalDetailPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { partner, couple, self } = useAppData();
+  const confirm = useConfirm();
   const supabase = createClient();
   const [goal, setGoal] = useState<GoalWithCompletions | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
@@ -158,6 +160,7 @@ export default function GoalDetailPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const pendingMediaId = useRef<string | null>(null);
   const pendingCompletionId = useRef<string | null>(null);
+  const pendingOldPath = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -165,6 +168,7 @@ export default function GoalDetailPage() {
       .from("goals")
       .select("*, completions(*, completion_media(*))")
       .eq("id", id)
+      .order("completed_at", { referencedTable: "completions", ascending: true })
       .single();
     if (!data) {
       setNotFound(true);
@@ -218,14 +222,25 @@ export default function GoalDetailPage() {
   }
 
   async function handleDelete() {
-    if (!window.confirm("Permanently delete this goal and all its check-ins? This cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Delete this goal?",
+      message: "This permanently removes the goal and all its check-ins and photos. This cannot be undone.",
+      destructive: true,
+    });
+    if (!ok) return;
+    // Clean up storage before the cascade delete orphans the files
+    const paths = (goal!.completions as CompletionWithMedia[]).flatMap(
+      (c) => c.completion_media?.map((m) => m.storage_path) ?? []
+    );
+    await deletePhotos(paths);
     await supabase.from("goals").delete().eq("id", goal!.id);
     router.push("/goals");
   }
 
-  function openChangePhoto(mediaId: string, completionId: string) {
+  function openChangePhoto(mediaId: string, completionId: string, oldPath?: string) {
     pendingMediaId.current = mediaId;
     pendingCompletionId.current = completionId;
+    pendingOldPath.current = oldPath ?? null;
     photoInputRef.current?.click();
   }
 
@@ -245,6 +260,10 @@ export default function GoalDetailPage() {
           .from("completion_media")
           .update({ storage_path: newPath })
           .eq("id", mediaId);
+        // Remove the photo we just replaced so it doesn't orphan in storage
+        if (pendingOldPath.current && pendingOldPath.current !== newPath) {
+          await deletePhotos([pendingOldPath.current]);
+        }
       } else {
         await supabase.from("completion_media").insert({
           completion_id: pendingCompletionId.current,
@@ -259,6 +278,7 @@ export default function GoalDetailPage() {
       setChangingPhotoId(null);
       pendingMediaId.current = null;
       pendingCompletionId.current = null;
+      pendingOldPath.current = null;
       e.target.value = "";
     }
   }
@@ -492,7 +512,7 @@ export default function GoalDetailPage() {
                               />
                               {c.user_id === user?.id && (
                                 <button
-                                  onClick={() => openChangePhoto(c.completion_media[0].id, c.id)}
+                                  onClick={() => openChangePhoto(c.completion_media[0].id, c.id, c.completion_media[0].storage_path)}
                                   disabled={!!changingPhotoId}
                                   className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-[11px] font-medium px-2 py-1 rounded-lg active:scale-95 transition-transform disabled:opacity-50"
                                 >

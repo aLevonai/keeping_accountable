@@ -24,7 +24,8 @@ export function useGoals(coupleId: string | null | undefined) {
       .select("*, completions(*)")
       .eq("couple_id", coupleId)
       .is("archived_at", null)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .order("completed_at", { referencedTable: "completions", ascending: true });
 
     setGoals((data as GoalWithCompletions[]) ?? []);
     setLoading(false);

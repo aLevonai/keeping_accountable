@@ -8,6 +8,7 @@ import { useAppData } from "@/contexts/app-data";
 import type { Cadence } from "@/types/database";
 import { ArrowLeft, Bell } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const CADENCES: { value: Cadence; label: string }[] = [
   { value: "daily", label: "Daily" },
@@ -31,6 +32,7 @@ export default function NewGoalPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { couple, refetch } = useAppData();
+  const confirm = useConfirm();
   const supabase = createClient();
 
   const [title, setTitle] = useState("");
@@ -66,7 +68,12 @@ export default function NewGoalPage() {
 
     if (createError || !created) {
       setLoading(false);
-      alert("Failed to create goal. Please try again.");
+      await confirm({
+        title: "Couldn't create goal",
+        message: "Something went wrong. Please check your connection and try again.",
+        confirmText: "OK",
+        hideCancel: true,
+      });
       return;
     }
 

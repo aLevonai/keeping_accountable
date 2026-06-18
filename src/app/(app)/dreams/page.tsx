@@ -8,6 +8,7 @@ import { Plus, Check, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/utils/cn";
 import { createClient } from "@/lib/supabase/client";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { DreamRow } from "@/types/database";
 
 type StatusFilter = "active" | "achieved";
@@ -40,6 +41,7 @@ function DreamCard({
   onUpdate: () => void;
 }) {
   const supabase = createClient();
+  const confirm = useConfirm();
   const isShared = dream.owner_id === null;
   const isPartner = dream.owner_id === partnerId;
   const isAchieved = dream.achieved_at !== null;
@@ -69,7 +71,12 @@ function DreamCard({
   }
 
   async function handleDelete() {
-    if (!window.confirm("Delete this dream? This cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Delete this dream?",
+      message: "This cannot be undone.",
+      destructive: true,
+    });
+    if (!ok) return;
     await supabase.from("dreams").delete().eq("id", dream.id);
     onUpdate();
   }

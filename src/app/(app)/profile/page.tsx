@@ -11,6 +11,7 @@ import { compressImage } from "@/utils/image";
 import { getSignedPhotoUrl, thumbPath } from "@/utils/storage";
 import { ChevronRight } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 function getPartnerInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase();
@@ -29,6 +30,7 @@ export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { couple, partner, self } = useAppData();
   const { supported, subscribed, loading: pushLoading, permissionDenied, subscribe, unsubscribe } = usePush();
+  const confirm = useConfirm();
   const supabase = createClient();
   const router = useRouter();
 
@@ -97,7 +99,13 @@ export default function ProfilePage() {
 
   async function handleLeaveCouple() {
     if (!couple || !user) return;
-    if (!confirm("Are you sure you want to leave this couple? This cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Leave this couple?",
+      message: "You'll be disconnected from your partner and returned to setup. This cannot be undone.",
+      confirmText: "Leave",
+      destructive: true,
+    });
+    if (!ok) return;
     setLeaving(true);
     await supabase
       .from("couple_members")

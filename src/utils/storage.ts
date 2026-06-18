@@ -45,6 +45,16 @@ export async function uploadPhoto(
   return path;
 }
 
+// Deletes photos (and their thumbnails) from storage. Call this BEFORE removing
+// the owning DB rows, since the storage RLS policy checks couple membership via
+// the path. Removing a non-existent thumbnail is a no-op, so old photos uploaded
+// before thumbnails existed are handled gracefully.
+export async function deletePhotos(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const all = paths.flatMap((p) => [p, thumbPath(p)]);
+  await client().storage.from("media").remove(all);
+}
+
 // The media bucket is private; reads require a short-lived signed URL scoped by
 // the storage RLS policy (caller must be a member of the path's couple).
 export async function getSignedPhotoUrl(path: string): Promise<string | null> {

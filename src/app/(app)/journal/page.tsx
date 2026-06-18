@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
-import { getSignedPhotoUrlsWithThumbs } from "@/utils/storage";
+import { getSignedPhotoUrlsWithThumbs, deletePhotos } from "@/utils/storage";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Trash2, ImageOff } from "lucide-react";
 
 interface JournalEntry {
@@ -246,6 +247,7 @@ function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation,
 export default function JournalPage() {
   const { user } = useAuth();
   const { couple, partner } = useAppData();
+  const confirm = useConfirm();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
@@ -410,12 +412,21 @@ export default function JournalPage() {
   async function handleRemovePhoto(entry: JournalEntry) {
     const media = entry.completion_media?.[0];
     if (!media) return;
+    // Remove the storage file(s) before the DB row (RLS on storage needs the row's path scope)
+    await deletePhotos([media.storage_path]);
     await supabase.from("completion_media").delete().eq("id", media.id);
     load();
   }
 
   async function handleDeleteEntry(entry: JournalEntry) {
-    if (!window.confirm("Delete this check-in? This cannot be undone.")) return;
+    const ok = await confirm({
+      title: "Delete check-in?",
+      message: "This removes the check-in and its photo. This cannot be undone.",
+      destructive: true,
+    });
+    if (!ok) return;
+    const paths = entry.completion_media?.map((m) => m.storage_path) ?? [];
+    await deletePhotos(paths);
     await supabase.from("completions").delete().eq("id", entry.id);
     load();
   }

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
 import { uploadPhoto } from "@/utils/storage";
 import { compressImage } from "@/utils/image";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { ArrowLeft, Camera, Check } from "lucide-react";
 
 export default function CheckInPage() {
@@ -14,6 +15,7 @@ export default function CheckInPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { couple, self, partner } = useAppData();
+  const confirm = useConfirm();
   const supabase = createClient();
 
   const [note, setNote] = useState("");
@@ -74,7 +76,12 @@ export default function CheckInPage() {
 
     if (error || !completion) {
       setLoading(false);
-      alert("Something went wrong. Try again.");
+      await confirm({
+        title: "Couldn't save check-in",
+        message: "Something went wrong. Please check your connection and try again.",
+        confirmText: "OK",
+        hideCancel: true,
+      });
       return;
     }
 
