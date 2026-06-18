@@ -23,35 +23,69 @@ type PersonFilter = "all" | "me" | "partner";
 type TimeFilter = "all" | "thisMonth" | "lastMonth" | "thisYear";
 type Layout = "classic" | "canvas";
 
-// --- Canvas layout constants ---
-const CARD_W = 150;
-const H_GAP = 20;
-const V_GAP = 38;
-const COLS = 3;
-const PAD = 20;
-// Approximate card footprint: image (~150) + caption (~56) + tape/padding (~36)
-const ROW_H = 242;
-const PAN_MARGIN = 90; // keep at least this many px of board on screen
+// --- Canvas collage layout ---
+const NUM_COLS = 4;
+const COL_W = 128;        // column stride; cards are wider than this on purpose → overlap
+const BOARD_PAD = 28;
+const PAN_MARGIN = 80;    // keep at least this many px of board on screen
+const MIN_SCALE = 0.35;
+const MAX_SCALE = 2.4;
+const INIT_SCALE = 0.82;
+
+const WIDTHS = [120, 134, 150, 126, 144];
+const ROT = [-5, 3.2, -2.5, 4.6, -3.6, 2.1, -4.2, 5.1, -1.6, 3.7, -2.9, 4.1];
+const ASPECTS = [
+  { cls: "aspect-square", r: 1 },
+  { cls: "aspect-[4/3]", r: 0.75 },
+  { cls: "aspect-[3/4]", r: 1.333 },
+  { cls: "aspect-[4/3]", r: 0.75 },
+  { cls: "aspect-square", r: 1 },
+  { cls: "aspect-[5/4]", r: 0.8 },
+  { cls: "aspect-[3/4]", r: 1.333 },
+  { cls: "aspect-square", r: 1 },
+];
 
 // Seeded LCG so each card's scatter is stable across re-renders
 function seededRand(seed: number): number {
   return ((seed * 1664525 + 1013904223) & 0x7fffffff) / 0x7fffffff;
 }
-
-function cardPos(index: number) {
-  const col = index % COLS;
-  const row = Math.floor(index / COLS);
-  const nx = (seededRand(index * 7 + 1) - 0.5) * 46;
-  const ny = (seededRand(index * 7 + 3) - 0.5) * 26;
-  return {
-    x: PAD + col * (CARD_W + H_GAP) + nx,
-    y: PAD + row * (ROW_H + V_GAP) + ny + 12,
-  };
+function seedInt(seed: number, mod: number): number {
+  return Math.floor(seededRand(seed) * mod) % mod;
 }
 
-// --- Visual variety ---
-const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
-const ASPECTS = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
+interface CardPlacement { x: number; y: number; w: number; rot: number; cls: string }
+
+// Shortest-column masonry with per-card jitter → dense but organic
+function buildLayout(entries: JournalEntry[]): { placements: CardPlacement[]; boardW: number; boardH: number } {
+  const colH = new Array(NUM_COLS).fill(BOARD_PAD + seededRand(99) * 26);
+  // give each column a slightly different starting offset so the top edge isn't a straight line
+  for (let c = 0; c < NUM_COLS; c++) colH[c] = BOARD_PAD + seededRand(c * 31 + 5) * 40;
+
+  const placements = entries.map((entry, i) => {
+    let col = 0;
+    for (let c = 1; c < NUM_COLS; c++) if (colH[c] < colH[col]) col = c;
+
+    const w = WIDTHS[seedInt(i * 13 + 1, WIDTHS.length)];
+    const asp = ASPECTS[i % ASPECTS.length];
+    const imgH = w * asp.r;
+    const cardH = imgH + 66 + (entry.note ? 26 : 0); // image + caption + tape/padding
+    const jitterX = (seededRand(i * 7 + 1) - 0.5) * 32;
+    const jitterY = seededRand(i * 7 + 5) * 12;
+    const x = BOARD_PAD + col * COL_W + jitterX;
+    const y = colH[col] + jitterY;
+    const gap = 10 + seededRand(i * 7 + 9) * 24;
+    colH[col] = y + cardH + gap;
+    return { x, y, w, rot: ROT[i % ROT.length], cls: asp.cls };
+  });
+
+  const boardW = BOARD_PAD * 2 + (NUM_COLS - 1) * COL_W + 170;
+  const boardH = Math.max(BOARD_PAD, ...colH) + BOARD_PAD;
+  return { placements, boardW, boardH };
+}
+
+// --- Sub-components ---
+const FALLBACK_ROT = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
+const FALLBACK_ASPECT = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
 const GRAD_BG = [
   "linear-gradient(135deg,#f5e6d8 0%,#e8d5c4 100%)",
   "linear-gradient(135deg,#dce8f0 0%,#c8dce8 100%)",
@@ -114,19 +148,21 @@ function DeleteMenu({ hasPhoto, onRemovePhoto, onDeleteEntry, onClose }: {
   );
 }
 
-function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, onRemovePhoto, onDeleteEntry }: {
+function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation, aspectClass, onRemovePhoto, onDeleteEntry }: {
   entry: JournalEntry;
   index: number;
   isOwn: boolean;
   thumbUrl?: string;
   fullUrl?: string;
-  width?: number; // fixed px in canvas mode; full-width in classic
+  width?: number;        // fixed px in canvas mode; full-width in classic
+  rotation?: number;     // canvas overrides the default tilt
+  aspectClass?: string;  // canvas overrides the default aspect
   onRemovePhoto: (e: JournalEntry) => void;
   onDeleteEntry: (e: JournalEntry) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const rotation = ROTATIONS[index % ROTATIONS.length];
-  const aspectClass = ASPECTS[index % ASPECTS.length];
+  const rot = rotation ?? FALLBACK_ROT[index % FALLBACK_ROT.length];
+  const asp = aspectClass ?? FALLBACK_ASPECT[index % FALLBACK_ASPECT.length];
   const gradBg = GRAD_BG[index % GRAD_BG.length];
   const tapeAngle = index % 3 === 0 ? -4 : index % 3 === 1 ? 3 : -2;
 
@@ -141,13 +177,13 @@ function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, onRemoveP
       className="relative bg-white rounded-sm p-2 pb-7"
       style={{
         width: width ?? "100%",
-        boxShadow: "0 3px 12px rgba(0,0,0,0.13),0 0 0 0.5px rgba(0,0,0,0.06)",
-        transform: `rotate(${rotation}deg)`,
+        boxShadow: "0 4px 14px rgba(0,0,0,0.15),0 0 0 0.5px rgba(0,0,0,0.06)",
+        transform: `rotate(${rot}deg)`,
       }}
     >
       <TapeStrip angle={tapeAngle} />
 
-      <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
+      <div className={`w-full ${asp} overflow-hidden bg-[--surface-alt] relative`}>
         {photo && photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -223,10 +259,13 @@ export default function JournalPage() {
     if (saved === "classic" || saved === "canvas") setLayout(saved);
   }, []);
 
-  // Pan + zoom (canvas mode)
+  // Pan + zoom (canvas mode). Refs are the source of truth so rapid
+  // gestures don't fight stale state; state mirrors them to trigger renders.
   const canvasRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef(INIT_SCALE);
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const [scale, setScale] = useState(INIT_SCALE);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [scale, setScale] = useState(0.78);
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
   const lastPanPos = useRef({ x: 0, y: 0 });
   const lastPinchDist = useRef<number | null>(null);
@@ -255,11 +294,6 @@ export default function JournalPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Reset pan when filters change so you always land back at the top-left
-  useEffect(() => {
-    setOffset({ x: 0, y: 0 });
-  }, [personFilter, timeFilter]);
-
   const filteredEntries = useMemo(() => {
     let list = entries;
     if (personFilter === "me") list = list.filter(e => e.user_id === user?.id);
@@ -280,21 +314,55 @@ export default function JournalPage() {
     return list;
   }, [entries, personFilter, timeFilter, user?.id]);
 
-  const rows = Math.ceil(filteredEntries.length / COLS);
-  const canvasW = PAD * 2 + COLS * (CARD_W + H_GAP) + 60;
-  const canvasH = PAD * 2 + rows * (ROW_H + V_GAP) + 60;
+  const { placements, boardW, boardH } = useMemo(() => buildLayout(filteredEntries), [filteredEntries]);
 
-  // Keep the board from being dragged completely off-screen
-  const clampOffset = useCallback((x: number, y: number) => {
+  function clampOffset(x: number, y: number, s: number) {
     const el = canvasRef.current;
     if (!el) return { x, y };
     const vw = el.clientWidth, vh = el.clientHeight;
-    const sw = canvasW * scale, sh = canvasH * scale;
+    const sw = boardW * s, sh = boardH * s;
     return {
       x: Math.min(vw - PAN_MARGIN, Math.max(PAN_MARGIN - sw, x)),
       y: Math.min(vh - PAN_MARGIN, Math.max(PAN_MARGIN - sh, y)),
     };
-  }, [canvasW, canvasH, scale]);
+  }
+
+  function commit(s: number, o: { x: number; y: number }) {
+    scaleRef.current = s;
+    offsetRef.current = o;
+    setScale(s);
+    setOffset(o);
+  }
+
+  // Zoom while keeping a focal point (in client coords) anchored in place
+  function applyZoom(rawScale: number, focalClientX: number, focalClientY: number) {
+    const el = canvasRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const fx = focalClientX - rect.left;
+    const fy = focalClientY - rect.top;
+    const prev = scaleRef.current;
+    const next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, rawScale));
+    const k = next / prev;
+    const o = offsetRef.current;
+    const nx = fx - (fx - o.x) * k;
+    const ny = fy - (fy - o.y) * k;
+    commit(next, clampOffset(nx, ny, next));
+  }
+
+  // Recenter the board on the current filter set
+  const recenter = useCallback(() => {
+    const el = canvasRef.current;
+    const s = INIT_SCALE;
+    if (!el) { commit(s, { x: 0, y: 0 }); return; }
+    const vw = el.clientWidth;
+    const x = Math.min(BOARD_PAD, (vw - boardW * s) / 2);
+    commit(s, clampOffset(x, BOARD_PAD * s, s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardW, boardH]);
+
+  // Re-home the view whenever the filtered set changes
+  useEffect(() => { recenter(); }, [personFilter, timeFilter, recenter]);
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest("button,a")) return;
@@ -310,15 +378,17 @@ export default function JournalPage() {
 
     if (pts.length >= 2) {
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      if (lastPinchDist.current !== null) {
-        const ratio = dist / lastPinchDist.current;
-        setScale(s => Math.min(2.2, Math.max(0.3, s * ratio)));
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      if (lastPinchDist.current !== null && lastPinchDist.current > 0) {
+        applyZoom(scaleRef.current * (dist / lastPinchDist.current), midX, midY);
       }
       lastPinchDist.current = dist;
     } else {
       const dx = e.clientX - lastPanPos.current.x;
       const dy = e.clientY - lastPanPos.current.y;
-      setOffset(prev => clampOffset(prev.x + dx, prev.y + dy));
+      const o = offsetRef.current;
+      commit(scaleRef.current, clampOffset(o.x + dx, o.y + dy, scaleRef.current));
       lastPanPos.current = { x: e.clientX, y: e.clientY };
     }
   }
@@ -333,10 +403,8 @@ export default function JournalPage() {
   }
 
   function onWheel(e: React.WheelEvent) {
-    // No scroll container here (overflow hidden), so no preventDefault needed —
-    // avoids the passive-listener console warning.
-    const factor = e.deltaY < 0 ? 1.08 : 0.93;
-    setScale(s => Math.min(2.2, Math.max(0.3, s * factor)));
+    // overflow is hidden here, so nothing scrolls — no preventDefault needed
+    applyZoom(scaleRef.current * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX, e.clientY);
   }
 
   async function handleRemovePhoto(entry: JournalEntry) {
@@ -455,7 +523,7 @@ export default function JournalPage() {
     );
   }
 
-  // --- Canvas: free pan + zoom corkboard ---
+  // --- Canvas: free pan + zoom collage ---
   return (
     <div className="fixed inset-0 flex flex-col bg-[--background]" style={{ paddingBottom: "calc(62px + env(safe-area-inset-bottom))" }}>
       {Header}
@@ -474,22 +542,25 @@ export default function JournalPage() {
           <div
             style={{
               position: "absolute",
-              width: canvasW,
-              height: canvasH,
+              width: boardW,
+              height: boardH,
               transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})`,
               transformOrigin: "0 0",
               willChange: "transform",
             }}
           >
             {filteredEntries.map((entry, i) => {
-              const pos = cardPos(i);
+              const p = placements[i];
+              if (!p) return null;
               return (
-                <div key={entry.id} style={{ position: "absolute", left: pos.x, top: pos.y }}>
+                <div key={entry.id} style={{ position: "absolute", left: p.x, top: p.y }}>
                   <PolaroidCard
                     entry={entry}
                     index={i}
                     isOwn={entry.user_id === user?.id}
-                    width={CARD_W}
+                    width={p.w}
+                    rotation={p.rot}
+                    aspectClass={p.cls}
                     thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
                     fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
                     onRemovePhoto={handleRemovePhoto}
