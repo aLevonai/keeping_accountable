@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppData } from "@/contexts/app-data";
+import { useDreams } from "@/hooks/use-dreams";
 import { getSignedPhotoUrlsWithThumbs, deletePhotos } from "@/utils/storage";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
 import { useConfirm } from "@/components/ui/confirm-dialog";
-import { Trash2, ImageOff } from "lucide-react";
+import type { DreamRow } from "@/types/database";
+import { Trash2, ImageOff, X } from "lucide-react";
 
 interface JournalEntry {
   id: string;
@@ -19,6 +22,11 @@ interface JournalEntry {
   users: { display_name: string } | null;
   completion_media: { id: string; storage_path: string }[];
 }
+
+// A board item is either a check-in photo or a dream.
+type JournalItem =
+  | { kind: "photo"; date: number; entry: JournalEntry }
+  | { kind: "dream"; date: number; dream: DreamRow };
 
 type PersonFilter = "all" | "me" | "partner";
 type TimeFilter = "all" | "thisMonth" | "lastMonth" | "thisYear";
@@ -32,6 +40,8 @@ const PAN_MARGIN = 80;    // keep at least this many px of board on screen
 const MIN_SCALE = 0.35;
 const MAX_SCALE = 2.4;
 const INIT_SCALE = 0.82;
+const DREAM_W = 198;      // dreams are deliberately bigger than photo polaroids
+const TAP_SLOP = 6;       // px of movement before a press counts as a drag, not a tap
 
 const WIDTHS = [120, 134, 150, 126, 144];
 const ROT = [-5, 3.2, -2.5, 4.6, -3.6, 2.1, -4.2, 5.1, -1.6, 3.7, -2.9, 4.1];
@@ -56,32 +66,47 @@ function seedInt(seed: number, mod: number): number {
 
 interface CardPlacement { x: number; y: number; w: number; rot: number; cls: string }
 
-// Shortest-column masonry with per-card jitter → dense but organic
-function buildLayout(entries: JournalEntry[]): { placements: CardPlacement[]; boardW: number; boardH: number } {
-  const colH = new Array(NUM_COLS).fill(BOARD_PAD + seededRand(99) * 26);
+// Shortest-column masonry with per-card jitter → dense but organic.
+// Handles mixed photo + (bigger) dream cards via per-item width/height.
+function buildLayout(items: JournalItem[]): { placements: CardPlacement[]; boardW: number; boardH: number } {
+  const colH = new Array(NUM_COLS).fill(0);
   // give each column a slightly different starting offset so the top edge isn't a straight line
   for (let c = 0; c < NUM_COLS; c++) colH[c] = BOARD_PAD + seededRand(c * 31 + 5) * 40;
 
-  const placements = entries.map((entry, i) => {
+  const placements = items.map((it, i) => {
     let col = 0;
     for (let c = 1; c < NUM_COLS; c++) if (colH[c] < colH[col]) col = c;
 
-    const w = WIDTHS[seedInt(i * 13 + 1, WIDTHS.length)];
-    const asp = ASPECTS[i % ASPECTS.length];
-    const imgH = w * asp.r;
-    const cardH = imgH + 66 + (entry.note ? 26 : 0); // image + caption + tape/padding
-    const jitterX = (seededRand(i * 7 + 1) - 0.5) * 32;
+    let w: number, cardH: number, cls = "";
+    if (it.kind === "photo") {
+      w = WIDTHS[seedInt(i * 13 + 1, WIDTHS.length)];
+      const asp = ASPECTS[i % ASPECTS.length];
+      cls = asp.cls;
+      cardH = w * asp.r + 66 + (it.entry.note ? 26 : 0); // image + caption + tape/padding
+    } else {
+      w = DREAM_W;
+      cardH = 150 + (it.dream.note ? 46 : 0);
+    }
+
+    const jitterX = (seededRand(i * 7 + 1) - 0.5) * 28;
     const jitterY = seededRand(i * 7 + 5) * 12;
     const x = BOARD_PAD + col * COL_W + jitterX;
     const y = colH[col] + jitterY;
     const gap = 10 + seededRand(i * 7 + 9) * 24;
     colH[col] = y + cardH + gap;
-    return { x, y, w, rot: ROT[i % ROT.length], cls: asp.cls };
+    return { x, y, w, rot: ROT[i % ROT.length], cls };
   });
 
-  const boardW = BOARD_PAD * 2 + (NUM_COLS - 1) * COL_W + 170;
+  const boardW = BOARD_PAD * 2 + (NUM_COLS - 1) * COL_W + Math.max(170, DREAM_W + 30);
   const boardH = Math.max(BOARD_PAD, ...colH) + BOARD_PAD;
   return { placements, boardW, boardH };
+}
+
+// shared = primary, mine = muted, partner = partner accent (matches dreams page)
+function dreamOwnerColor(dream: DreamRow, userId?: string): string {
+  if (dream.owner_id === null) return "var(--primary)";
+  if (dream.owner_id === userId) return "var(--muted)";
+  return "var(--partner-accent)";
 }
 
 // --- Sub-components ---
@@ -149,7 +174,7 @@ function DeleteMenu({ hasPhoto, onRemovePhoto, onDeleteEntry, onClose }: {
   );
 }
 
-function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation, aspectClass, onRemovePhoto, onDeleteEntry }: {
+function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation, aspectClass, onOpen, onRemovePhoto, onDeleteEntry }: {
   entry: JournalEntry;
   index: number;
   isOwn: boolean;
@@ -158,6 +183,7 @@ function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation,
   width?: number;        // fixed px in canvas mode; full-width in classic
   rotation?: number;     // canvas overrides the default tilt
   aspectClass?: string;  // canvas overrides the default aspect
+  onOpen?: () => void;   // tap the photo → lightbox
   onRemovePhoto: (e: JournalEntry) => void;
   onDeleteEntry: (e: JournalEntry) => void;
 }) {
@@ -192,7 +218,8 @@ function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation,
             alt="Check-in"
             loading="lazy"
             decoding="async"
-            className="w-full h-full object-cover"
+            onClick={onOpen}
+            className="w-full h-full object-cover cursor-zoom-in"
             onError={thumbUrl && fullUrl ? (e) => {
               if (e.currentTarget.src !== fullUrl) e.currentTarget.src = fullUrl;
             } : undefined}
@@ -243,15 +270,75 @@ function PolaroidCard({ entry, index, isOwn, thumbUrl, fullUrl, width, rotation,
   );
 }
 
+function DreamCard({ dream, index, ownerColor, width, rotation, onOpen }: {
+  dream: DreamRow;
+  index: number;
+  ownerColor: string;
+  width?: number;
+  rotation?: number;
+  onOpen?: () => void;
+}) {
+  const rot = rotation ?? FALLBACK_ROT[index % FALLBACK_ROT.length];
+  const tapeAngle = index % 3 === 0 ? 3 : index % 3 === 1 ? -3 : 2;
+  const achieved = dream.achieved_at !== null;
+  const accent = achieved ? "var(--success)" : ownerColor;
+
+  return (
+    <div
+      onClick={onOpen}
+      className="relative rounded-lg p-3.5 cursor-pointer"
+      style={{
+        width: width ?? "100%",
+        background: "linear-gradient(160deg,#fffdf9 0%,#f6eee4 100%)",
+        boxShadow: "0 6px 20px rgba(0,0,0,0.17),0 0 0 0.5px rgba(0,0,0,0.05)",
+        transform: `rotate(${rot}deg)`,
+        border: "1px solid rgba(0,0,0,0.04)",
+      }}
+    >
+      <TapeStrip angle={tapeAngle} />
+
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[26px] leading-none">{dream.emoji || "✨"}</span>
+        <span
+          className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.08em]"
+          style={{ color: accent }}
+        >
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: accent }} />
+          {achieved ? "Achieved" : "Dream"}
+        </span>
+      </div>
+
+      <h3
+        className="font-[family-name:var(--font-instrument-serif)] italic text-[18px] text-[--foreground] leading-tight"
+        dir={isRTL(dream.title) ? "rtl" : "ltr"}
+      >
+        {dream.title}
+      </h3>
+
+      {dream.note && (
+        <p
+          className="text-[11px] text-[#7a6f64] mt-1.5 line-clamp-3 leading-snug"
+          dir={isRTL(dream.note) ? "rtl" : "ltr"}
+        >
+          {dream.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // --- Page ---
 export default function JournalPage() {
   const { user } = useAuth();
   const { couple, partner } = useAppData();
+  const { dreams } = useDreams(couple?.id);
   const confirm = useConfirm();
+  const router = useRouter();
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const supabase = createClient();
 
   // Layout preference (set on the Profile page, stored per-device)
@@ -270,6 +357,8 @@ export default function JournalPage() {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const activePointers = useRef(new Map<number, { x: number; y: number }>());
   const lastPanPos = useRef({ x: 0, y: 0 });
+  const downPos = useRef({ x: 0, y: 0 });
+  const movedRef = useRef(false); // true once a press turns into a drag/pinch — suppresses tap actions
   const lastPinchDist = useRef<number | null>(null);
 
   // Filters
@@ -296,27 +385,48 @@ export default function JournalPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filteredEntries = useMemo(() => {
-    let list = entries;
-    if (personFilter === "me") list = list.filter(e => e.user_id === user?.id);
-    else if (personFilter === "partner") list = list.filter(e => e.user_id !== user?.id);
+  // Close the lightbox with Escape
+  useEffect(() => {
+    if (!lightboxUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightboxUrl(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxUrl]);
 
+  const inTimeWindow = useCallback((iso: string) => {
+    const d = new Date(iso);
     const now = new Date();
-    if (timeFilter === "thisMonth") {
-      const start = startOfMonth(now);
-      list = list.filter(e => new Date(e.completed_at) >= start);
-    } else if (timeFilter === "lastMonth") {
-      const start = startOfMonth(subMonths(now, 1));
-      const end = endOfMonth(subMonths(now, 1));
-      list = list.filter(e => { const d = new Date(e.completed_at); return d >= start && d <= end; });
-    } else if (timeFilter === "thisYear") {
-      const start = startOfYear(now);
-      list = list.filter(e => new Date(e.completed_at) >= start);
-    }
-    return list;
-  }, [entries, personFilter, timeFilter, user?.id]);
+    if (timeFilter === "thisMonth") return d >= startOfMonth(now);
+    if (timeFilter === "lastMonth") return d >= startOfMonth(subMonths(now, 1)) && d <= endOfMonth(subMonths(now, 1));
+    if (timeFilter === "thisYear") return d >= startOfYear(now);
+    return true;
+  }, [timeFilter]);
 
-  const { placements, boardW, boardH } = useMemo(() => buildLayout(filteredEntries), [filteredEntries]);
+  // Unified, date-ordered board: photos + dreams merged newest-first
+  const items = useMemo<JournalItem[]>(() => {
+    const photoItems: JournalItem[] = entries
+      .filter(e => {
+        if (personFilter === "me" && e.user_id !== user?.id) return false;
+        if (personFilter === "partner" && e.user_id === user?.id) return false;
+        return inTimeWindow(e.completed_at);
+      })
+      .map(e => ({ kind: "photo", date: new Date(e.completed_at).getTime(), entry: e }));
+
+    const dreamItems: JournalItem[] = dreams
+      .filter(d => {
+        // shared dreams belong to both; personal dreams only to their owner
+        if (personFilter === "me" && !(d.owner_id === user?.id || d.owner_id === null)) return false;
+        if (personFilter === "partner" && !(d.owner_id === partner?.id || d.owner_id === null)) return false;
+        return inTimeWindow(d.achieved_at ?? d.created_at);
+      })
+      .map(d => ({ kind: "dream", date: new Date(d.achieved_at ?? d.created_at).getTime(), dream: d }));
+
+    return [...photoItems, ...dreamItems].sort((a, b) => b.date - a.date);
+  }, [entries, dreams, personFilter, timeFilter, user?.id, partner?.id, inTimeWindow]);
+
+  const photoCount = useMemo(() => items.filter(it => it.kind === "photo").length, [items]);
+
+  const { placements, boardW, boardH } = useMemo(() => buildLayout(items), [items]);
 
   function clampOffset(x: number, y: number, s: number) {
     const el = canvasRef.current;
@@ -352,7 +462,7 @@ export default function JournalPage() {
     commit(next, clampOffset(nx, ny, next));
   }
 
-  // Recenter the board on the current filter set
+  // Recenter the board on the current item set
   const recenter = useCallback(() => {
     const el = canvasRef.current;
     const s = INIT_SCALE;
@@ -370,6 +480,8 @@ export default function JournalPage() {
     if ((e.target as HTMLElement).closest("button,a")) return;
     activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     lastPanPos.current = { x: e.clientX, y: e.clientY };
+    downPos.current = { x: e.clientX, y: e.clientY };
+    movedRef.current = false;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
@@ -379,6 +491,7 @@ export default function JournalPage() {
     const pts = Array.from(activePointers.current.values());
 
     if (pts.length >= 2) {
+      movedRef.current = true; // a pinch is never a tap
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       const midX = (pts[0].x + pts[1].x) / 2;
       const midY = (pts[0].y + pts[1].y) / 2;
@@ -387,6 +500,9 @@ export default function JournalPage() {
       }
       lastPinchDist.current = dist;
     } else {
+      if (Math.hypot(e.clientX - downPos.current.x, e.clientY - downPos.current.y) > TAP_SLOP) {
+        movedRef.current = true;
+      }
       const dx = e.clientX - lastPanPos.current.x;
       const dy = e.clientY - lastPanPos.current.y;
       const o = offsetRef.current;
@@ -431,9 +547,54 @@ export default function JournalPage() {
     load();
   }
 
+  // Open the photo lightbox unless the press was actually a drag/pinch
+  function openPhoto(entry: JournalEntry) {
+    if (movedRef.current) return;
+    const photo = entry.completion_media?.[0];
+    if (!photo) return;
+    const url = fullUrls[photo.storage_path] ?? thumbUrls[photo.storage_path];
+    if (url) setLightboxUrl(url);
+  }
+
+  function openDreams() {
+    if (movedRef.current) return;
+    router.push("/dreams");
+  }
+
+  function photoUrlsFor(entry: JournalEntry) {
+    const p = entry.completion_media?.[0];
+    return {
+      thumbUrl: p ? thumbUrls[p.storage_path] : undefined,
+      fullUrl: p ? fullUrls[p.storage_path] : undefined,
+    };
+  }
+
   if (loading) return <JournalSkeleton />;
 
   const partnerName = partner?.display_name ?? "Partner";
+
+  const lightbox = lightboxUrl && (
+    <div
+      className="fixed inset-0 z-[90] bg-black/90 flex items-center justify-center"
+      onClick={() => setLightboxUrl(null)}
+    >
+      <button
+        onClick={() => setLightboxUrl(null)}
+        className="absolute right-4 w-9 h-9 rounded-full bg-white/15 text-white flex items-center justify-center active:scale-95 transition-transform"
+        style={{ top: "calc(16px + env(safe-area-inset-top))" }}
+        aria-label="Close"
+      >
+        <X size={20} />
+      </button>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={lightboxUrl}
+        alt="Check-in"
+        className="max-h-[90vh] max-w-[92vw] object-contain rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
 
   const FilterBar = (
     <div className="px-5 pt-3 pb-2 flex-shrink-0">
@@ -476,60 +637,82 @@ export default function JournalPage() {
       <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground] leading-none">
         Journal
       </h1>
-      {filteredEntries.length > 0 && (
-        <p className="text-[11px] text-[--muted] mt-0.5">{filteredEntries.length} memories</p>
+      {photoCount > 0 && (
+        <p className="text-[11px] text-[--muted] mt-0.5">{photoCount} memories</p>
       )}
     </div>
   );
 
   const emptyState = (
     <div className="flex-1 flex items-center justify-center text-[--muted] text-[14px] px-8 text-center">
-      {entries.length === 0 ? "No check-ins yet. Complete a goal to see it here." : "No check-ins match these filters."}
+      {entries.length === 0 && dreams.length === 0
+        ? "No check-ins yet. Complete a goal to see it here."
+        : "Nothing matches these filters."}
     </div>
   );
 
-  // --- Classic: two-column scroll ---
+  // --- Classic: two-column scroll, dreams as full-width breaks ---
   if (layout === "classic") {
-    const leftEntries = filteredEntries.filter((_, i) => i % 2 === 0);
-    const rightEntries = filteredEntries.filter((_, i) => i % 2 !== 0);
+    const blocks: React.ReactNode[] = [];
+    let buf: { entry: JournalEntry; idx: number }[] = [];
+    let key = 0;
+    const flush = () => {
+      if (buf.length === 0) return;
+      const left = buf.filter((_, i) => i % 2 === 0);
+      const right = buf.filter((_, i) => i % 2 !== 0);
+      const photoCard = (b: { entry: JournalEntry; idx: number }) => {
+        const { thumbUrl, fullUrl } = photoUrlsFor(b.entry);
+        return (
+          <PolaroidCard
+            key={b.entry.id}
+            entry={b.entry}
+            index={b.idx}
+            isOwn={b.entry.user_id === user?.id}
+            thumbUrl={thumbUrl}
+            fullUrl={fullUrl}
+            onOpen={() => openPhoto(b.entry)}
+            onRemovePhoto={handleRemovePhoto}
+            onDeleteEntry={handleDeleteEntry}
+          />
+        );
+      };
+      blocks.push(
+        <div key={`p${key++}`} className="flex gap-2.5">
+          <div className="flex-1 flex flex-col gap-5">{left.map(photoCard)}</div>
+          <div className="flex-1 flex flex-col gap-5 pt-8">{right.map(photoCard)}</div>
+        </div>
+      );
+      buf = [];
+    };
+
+    items.forEach((it, i) => {
+      if (it.kind === "photo") {
+        buf.push({ entry: it.entry, idx: i });
+      } else {
+        flush();
+        blocks.push(
+          <DreamCard
+            key={it.dream.id}
+            dream={it.dream}
+            index={i}
+            ownerColor={dreamOwnerColor(it.dream, user?.id)}
+            onOpen={() => router.push("/dreams")}
+          />
+        );
+      }
+    });
+    flush();
+
     return (
       <div className="fixed inset-0 flex flex-col bg-[--background]" style={{ paddingBottom: "calc(62px + env(safe-area-inset-bottom))" }}>
         {Header}
         {FilterBar}
-        {filteredEntries.length === 0 ? emptyState : (
+        {items.length === 0 ? emptyState : (
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            <div className="flex gap-2.5 px-4 pt-3 pb-8">
-              <div className="flex-1 flex flex-col gap-5">
-                {leftEntries.map((entry, i) => (
-                  <PolaroidCard
-                    key={entry.id}
-                    entry={entry}
-                    index={i * 2}
-                    isOwn={entry.user_id === user?.id}
-                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                    onRemovePhoto={handleRemovePhoto}
-                    onDeleteEntry={handleDeleteEntry}
-                  />
-                ))}
-              </div>
-              <div className="flex-1 flex flex-col gap-5 pt-8">
-                {rightEntries.map((entry, i) => (
-                  <PolaroidCard
-                    key={entry.id}
-                    entry={entry}
-                    index={i * 2 + 1}
-                    isOwn={entry.user_id === user?.id}
-                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                    onRemovePhoto={handleRemovePhoto}
-                    onDeleteEntry={handleDeleteEntry}
-                  />
-                ))}
-              </div>
-            </div>
+            <div className="flex flex-col gap-5 px-4 pt-3 pb-8">{blocks}</div>
           </div>
         )}
+        {lightbox}
       </div>
     );
   }
@@ -539,7 +722,7 @@ export default function JournalPage() {
     <div className="fixed inset-0 flex flex-col bg-[--background]" style={{ paddingBottom: "calc(62px + env(safe-area-inset-bottom))" }}>
       {Header}
       {FilterBar}
-      {filteredEntries.length === 0 ? emptyState : (
+      {items.length === 0 ? emptyState : (
         <div
           ref={canvasRef}
           className="flex-1 overflow-hidden relative"
@@ -560,29 +743,47 @@ export default function JournalPage() {
               willChange: "transform",
             }}
           >
-            {filteredEntries.map((entry, i) => {
+            {items.map((it, i) => {
               const p = placements[i];
               if (!p) return null;
               return (
-                <div key={entry.id} style={{ position: "absolute", left: p.x, top: p.y }}>
-                  <PolaroidCard
-                    entry={entry}
-                    index={i}
-                    isOwn={entry.user_id === user?.id}
-                    width={p.w}
-                    rotation={p.rot}
-                    aspectClass={p.cls}
-                    thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                    fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                    onRemovePhoto={handleRemovePhoto}
-                    onDeleteEntry={handleDeleteEntry}
-                  />
+                <div key={it.kind === "photo" ? it.entry.id : it.dream.id} style={{ position: "absolute", left: p.x, top: p.y }}>
+                  {it.kind === "photo" ? (
+                    (() => {
+                      const { thumbUrl, fullUrl } = photoUrlsFor(it.entry);
+                      return (
+                        <PolaroidCard
+                          entry={it.entry}
+                          index={i}
+                          isOwn={it.entry.user_id === user?.id}
+                          width={p.w}
+                          rotation={p.rot}
+                          aspectClass={p.cls}
+                          thumbUrl={thumbUrl}
+                          fullUrl={fullUrl}
+                          onOpen={() => openPhoto(it.entry)}
+                          onRemovePhoto={handleRemovePhoto}
+                          onDeleteEntry={handleDeleteEntry}
+                        />
+                      );
+                    })()
+                  ) : (
+                    <DreamCard
+                      dream={it.dream}
+                      index={i}
+                      ownerColor={dreamOwnerColor(it.dream, user?.id)}
+                      width={p.w}
+                      rotation={p.rot}
+                      onOpen={openDreams}
+                    />
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
       )}
+      {lightbox}
     </div>
   );
 }
