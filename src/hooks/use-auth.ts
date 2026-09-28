@@ -1,33 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
+import { qk, fetchSession, type SessionUser } from "@/lib/queries";
+import { clearPersistedCache } from "@/lib/query-client";
+import { clearPhotoUrlCache } from "@/lib/photo-urls";
 
+// The signed-in user. Read from the local session (persisted in the query
+// cache too), so it's available on the first frame of a warm launch.
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
-  const supabase = createClient();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.push("/welcome");
-  }
-
-  return { user, loading, signOut };
+  const { data: user, isPending } = useQuery({
+    queryKey: qk.session,
+    queryFn: fetchSession,
+    staleTime: Infinity,
+  });
+  const signOut = useSignOut();
+  return { user: user ?? null, loading: isPending, signOut };
 }
+
+export function useSignOut() {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  return async function signOut() {
+    await createClient().auth.signOut();
+    queryClient.clear();
+    clearPersistedCache();
+    clearPhotoUrlCache();
+    if (typeof caches !== "undefined") {
+      caches.delete("checkmate-photos-v1").catch(() => {});
+    }
+    router.replace("/welcome");
+  };
+}
+
+export type { SessionUser };

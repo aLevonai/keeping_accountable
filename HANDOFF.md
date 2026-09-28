@@ -1,5 +1,13 @@
 # CheckMate — Engineering Handoff
 
+> **Status (Sept 2026): resolved.** Every item below was addressed on branch
+> `claude/app-improvement-ideas-7cklof` (data layer moved to TanStack Query,
+> storage cleanup + couple-scoped delete policy, explicit completion ordering,
+> manifest/dead-code cleanup, in-app sheets instead of alert/confirm, check-in
+> success screen, journal month grouping, manifest shortcuts, per-page
+> pull-to-refresh, service-worker photo cache). Kept for history; see CLAUDE.md
+> for current conventions.
+
 This document is a self-contained brief for a Claude Code session. It summarises all bugs, performance issues, dead code, and product improvements found in a full codebase review. Work through each section top-to-bottom; each item includes the exact file and line.
 
 ---

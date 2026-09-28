@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -13,29 +13,53 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
+function pushSupported(): boolean {
+  return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
+}
+
+// Saves this device's subscription. Each device gets its own row, so pushes
+// reach every phone/laptop a person has installed the app on. Falls back to
+// the legacy single users.push_token column if the new table isn't there yet.
+async function saveSubscription(userId: string, sub: PushSubscription) {
+  const supabase = createClient();
+  const json = sub.toJSON();
+  const { error } = await supabase
+    .from("push_subscriptions")
+    .upsert({ user_id: userId, endpoint: sub.endpoint, subscription: json }, { onConflict: "endpoint" });
+  if (error) {
+    await supabase.from("users").update({ push_token: JSON.stringify(json) }).eq("id", userId);
+  }
+}
+
+async function deleteSubscription(userId: string, endpoint: string) {
+  const supabase = createClient();
+  await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  await supabase.from("users").update({ push_token: null }).eq("id", userId);
+}
+
+const noopSubscribe = () => () => {};
+
 export function usePush() {
   const { user } = useAuth();
-  const supabase = createClient();
-  const [supported, setSupported] = useState(false);
+  // false during server render / hydration, then the real value.
+  const supported = useSyncExternalStore(noopSubscribe, pushSupported, () => false);
   const [subscribed, setSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [denied, setPermissionDenied] = useState(false);
+  const permissionDenied = denied || (supported && Notification.permission === "denied");
 
   useEffect(() => {
-    const ok = typeof window !== "undefined" &&
-      "serviceWorker" in navigator &&
-      "PushManager" in window;
-    setSupported(ok);
-    if (!ok) return;
-
-    if (Notification.permission === "denied") setPermissionDenied(true);
-
-    navigator.serviceWorker.ready.then((reg) => {
-      reg.pushManager.getSubscription().then((sub) => {
-        setSubscribed(!!sub);
-      });
+    if (!supported) return;
+    let cancelled = false;
+    navigator.serviceWorker.ready.then(async (reg) => {
+      const sub = await reg.pushManager.getSubscription();
+      if (cancelled) return;
+      setSubscribed(!!sub);
+      // Keep the server copy fresh (subscriptions can rotate).
+      if (sub && user) void saveSubscription(user.id, sub);
     });
-  }, []);
+    return () => { cancelled = true; };
+  }, [supported, user]);
 
   async function subscribe() {
     if (!user || !VAPID_PUBLIC_KEY) return;
@@ -44,7 +68,6 @@ export function usePush() {
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setPermissionDenied(true);
-        setLoading(false);
         return;
       }
       setPermissionDenied(false);
@@ -53,10 +76,7 @@ export function usePush() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY).buffer as ArrayBuffer,
       });
-      await supabase
-        .from("users")
-        .update({ push_token: JSON.stringify(sub) })
-        .eq("id", user.id);
+      await saveSubscription(user.id, sub);
       setSubscribed(true);
     } catch (err) {
       console.error("Push subscribe failed:", err);
@@ -71,11 +91,10 @@ export function usePush() {
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      await sub?.unsubscribe();
-      await supabase
-        .from("users")
-        .update({ push_token: null })
-        .eq("id", user.id);
+      if (sub) {
+        await deleteSubscription(user.id, sub.endpoint);
+        await sub.unsubscribe();
+      }
       setSubscribed(false);
     } catch (err) {
       console.error("Push unsubscribe failed:", err);
