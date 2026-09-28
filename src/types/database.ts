@@ -208,6 +208,13 @@ export interface Database {
           emoji: string;
           achieved_at: string | null;
           created_at: string;
+          // Added in 0010 — optional so the app keeps working before the
+          // migration is applied.
+          achieved_note?: string | null;
+          achieved_photo_path?: string | null;
+          achieved_photo_width?: number | null;
+          achieved_photo_height?: number | null;
+          achieved_by?: string | null;
         };
         Insert: {
           id?: string;
@@ -223,7 +230,32 @@ export interface Database {
           title?: string;
           note?: string | null;
           emoji?: string;
+          owner_id?: string | null;
           achieved_at?: string | null;
+          achieved_note?: string | null;
+          achieved_photo_path?: string | null;
+          achieved_photo_width?: number | null;
+          achieved_photo_height?: number | null;
+          achieved_by?: string | null;
+        };
+      };
+      push_subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          endpoint: string;
+          subscription: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          subscription: Json;
+          created_at?: string;
+        };
+        Update: {
+          subscription?: Json;
         };
       };
     };
@@ -239,6 +271,21 @@ export type CompletionMediaRow = Database["public"]["Tables"]["completion_media"
 export type DreamRow = Database["public"]["Tables"]["dreams"]["Row"];
 export type GoalReminderRow = Database["public"]["Tables"]["goal_reminders"]["Row"];
 
+// The goals list only needs what period math uses — notes and media are loaded
+// per goal (history) or per page (journal).
+export type CompletionLite = Pick<CompletionRow, "id" | "goal_id" | "user_id" | "completed_at">;
+
 export type GoalWithCompletions = GoalRow & {
-  completions: CompletionRow[];
+  completions: CompletionLite[];
+};
+
+export type MediaLite = Pick<CompletionMediaRow, "id" | "storage_path" | "width" | "height">;
+
+export type CompletionWithMedia = CompletionLite & {
+  note: string | null;
+  completion_media: MediaLite[];
+};
+
+export type JournalCompletion = CompletionWithMedia & {
+  goals: { title: string; color: string } | null;
 };

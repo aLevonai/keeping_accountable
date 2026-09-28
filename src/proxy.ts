@@ -34,9 +34,12 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getClaims();
   const isAuthed = Boolean(claims?.claims?.sub);
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/welcome") ||
-    request.nextUrl.pathname.startsWith("/onboard") ||
-    request.nextUrl.pathname === "/";
+  const path = request.nextUrl.pathname;
+  const isAuthRoute =
+    path.startsWith("/welcome") ||
+    path.startsWith("/onboard") ||
+    path.startsWith("/join/") || // invite links must work before sign-in
+    path === "/";
 
   if (!isAuthed && !isAuthRoute) {
     return NextResponse.redirect(new URL("/welcome", request.url));
@@ -51,6 +54,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icons|manifest.json|sw.js|workbox-.*\\.js|apple-touch-icon\\.png).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons|manifest\\.json|sw\\.js|apple-touch-icon\\.png).*)",
   ],
 };

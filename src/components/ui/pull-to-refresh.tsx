@@ -62,7 +62,7 @@ export function PullToRefresh({
       >
         <RefreshCw
           size={20}
-          className="text-[--primary]"
+          className="text-primary"
           style={{
             opacity: progress,
             transform: `rotate(${progress * 270}deg)`,

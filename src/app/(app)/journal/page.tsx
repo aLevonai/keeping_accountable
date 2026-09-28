@@ -1,304 +1,161 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/use-auth";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAppData } from "@/contexts/app-data";
-import { getSignedPhotoUrlsWithThumbs } from "@/utils/storage";
-import { format } from "date-fns";
+import { useDreams } from "@/hooks/use-dreams";
+import { useActions } from "@/lib/actions";
+import { qk, fetchJournalPage, JOURNAL_PAGE_SIZE } from "@/lib/queries";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
-import { Trash2, ImageOff } from "lucide-react";
-
-interface JournalEntry {
-  id: string;
-  user_id: string;
-  note: string | null;
-  completed_at: string;
-  goals: { title: string } | null;
-  users: { display_name: string } | null;
-  completion_media: { id: string; storage_path: string }[];
-}
-
-const ROTATIONS = [-1.5, 1.2, -0.8, 1.8, -1.2, 0.6, -0.4, 1.6, -1.0, 0.9];
-const ASPECTS = ["aspect-square", "aspect-[4/3]", "aspect-[3/4]", "aspect-[4/3]", "aspect-square", "aspect-[3/4]"];
-const GRAD_BG = [
-  "linear-gradient(135deg, #f5e6d8 0%, #e8d5c4 100%)",
-  "linear-gradient(135deg, #dce8f0 0%, #c8dce8 100%)",
-  "linear-gradient(135deg, #e8e4f0 0%, #d8d2e8 100%)",
-  "linear-gradient(135deg, #d8ece0 0%, #c8e0d0 100%)",
-  "linear-gradient(135deg, #f0ece0 0%, #e4dcc8 100%)",
-  "linear-gradient(135deg, #ece0e8 0%, #dcc8d8 100%)",
-];
-
-function isRTL(text: string): boolean {
-  return /[֐-׿؀-ۿ]/.test(text[0] ?? "");
-}
-
-function TapeStrip({ angle = 0 }: { angle?: number }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: -8,
-        left: "50%",
-        transform: `translateX(-50%) rotate(${angle}deg)`,
-        width: 44,
-        height: 18,
-        background: "rgba(255,230,180,0.55)",
-        borderRadius: 2,
-        zIndex: 2,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-      }}
-    />
-  );
-}
-
-function DeleteMenu({
-  hasPhoto,
-  onRemovePhoto,
-  onDeleteEntry,
-  onClose,
-}: {
-  hasPhoto: boolean;
-  onRemovePhoto: () => void;
-  onDeleteEntry: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-      />
-      {/* Menu */}
-      <div
-        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 bg-white rounded-xl shadow-lg border border-[--border] overflow-hidden"
-        style={{ minWidth: 160 }}
-        onClick={e => e.stopPropagation()}
-      >
-        {hasPhoto && (
-          <button
-            onClick={onRemovePhoto}
-            className="flex items-center gap-2.5 w-full px-4 py-3 text-[13px] text-[--foreground] hover:bg-[--surface] transition-colors border-b border-[--border]"
-          >
-            <ImageOff size={14} className="text-[--muted]" />
-            Remove photo
-          </button>
-        )}
-        <button
-          onClick={onDeleteEntry}
-          className="flex items-center gap-2.5 w-full px-4 py-3 text-[13px] text-red-500 hover:bg-red-50 transition-colors"
-        >
-          <Trash2 size={14} />
-          Delete check-in
-        </button>
-      </div>
-    </>
-  );
-}
-
-function PolaroidCard({
-  entry,
-  index,
-  isOwn,
-  thumbUrl,
-  fullUrl,
-  onRemovePhoto,
-  onDeleteEntry,
-}: {
-  entry: JournalEntry;
-  index: number;
-  isOwn: boolean;
-  thumbUrl?: string;
-  fullUrl?: string;
-  onRemovePhoto: (entry: JournalEntry) => void;
-  onDeleteEntry: (entry: JournalEntry) => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const rotation = ROTATIONS[index % ROTATIONS.length];
-  const aspectClass = ASPECTS[index % ASPECTS.length];
-  const gradBg = GRAD_BG[index % GRAD_BG.length];
-  const tapeAngle = (index % 3 === 0) ? -4 : (index % 3 === 1) ? 3 : -2;
-
-  const photo = entry.completion_media?.[0];
-  const photoSrc = thumbUrl ?? fullUrl;
-  const name = entry.users?.display_name ?? "Someone";
-  const dayLabel = format(new Date(entry.completed_at), "EEE");
-  const goalTitle = entry.goals?.title ?? "Goal";
-
-  return (
-    <div
-      className="relative bg-white rounded-sm p-2 pb-7"
-      style={{
-        boxShadow: "0 3px 12px rgba(0,0,0,0.12), 0 0 0 0.5px rgba(0,0,0,0.06)",
-        transform: `rotate(${rotation}deg)`,
-      }}
-    >
-      <TapeStrip angle={tapeAngle} />
-
-      {/* Photo area */}
-      <div className={`w-full ${aspectClass} overflow-hidden bg-[--surface-alt] relative`}>
-        {photo && photoSrc ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={photoSrc}
-            alt="Check-in"
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-            onError={thumbUrl && fullUrl ? (e) => {
-              if (e.currentTarget.src !== fullUrl) e.currentTarget.src = fullUrl;
-            } : undefined}
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center"
-            style={{ background: gradBg }}
-          >
-            <div className="w-8 h-8 rounded-full bg-white/30" />
-          </div>
-        )}
-      </div>
-
-      {/* Caption */}
-      <div className="pt-2 px-0.5">
-        <p className="text-[10px] font-semibold text-[#666] uppercase tracking-[0.05em]">
-          {name} · {dayLabel}
-        </p>
-        <p className="text-[10px] text-[#999] mt-0.5 truncate">{goalTitle}</p>
-        {entry.note && (
-          <p
-            className="text-[10px] italic text-[#777] mt-1 line-clamp-2"
-            dir={isRTL(entry.note) ? "rtl" : "ltr"}
-          >&ldquo;{entry.note}&rdquo;</p>
-        )}
-      </div>
-
-      {/* Delete button — only for own entries */}
-      {isOwn && (
-        <div className="relative">
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            className="absolute bottom-0 right-0.5 w-6 h-6 flex items-center justify-center rounded-full bg-white/80 text-[#bbb] hover:text-[#888] transition-colors"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}
-          >
-            <Trash2 size={11} />
-          </button>
-          {menuOpen && (
-            <DeleteMenu
-              hasPhoto={!!photo}
-              onRemovePhoto={() => { setMenuOpen(false); onRemovePhoto(entry); }}
-              onDeleteEntry={() => { setMenuOpen(false); onDeleteEntry(entry); }}
-              onClose={() => setMenuOpen(false)}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import { confirmSheet } from "@/components/ui/feedback";
+import { firstName } from "@/components/ui/bits";
+import { Scrapbook, type JournalItem, type People } from "@/components/journal/scrapbook";
+import { Lightbox } from "@/components/journal/lightbox";
 
 export default function JournalPage() {
-  const { user } = useAuth();
-  const { couple } = useAppData();
-  const [entries, setEntries] = useState<JournalEntry[]>([]);
-  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
-  const [fullUrls, setFullUrls] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  return (
+    <Suspense fallback={<JournalSkeleton />}>
+      <Journal />
+    </Suspense>
+  );
+}
 
-  const load = useCallback(async () => {
-    if (!couple) return;
-    const { data } = await supabase
-      .from("completions")
-      .select("id, user_id, note, completed_at, goals!inner(title, couple_id), users(display_name), completion_media(id, storage_path)")
-      .eq("goals.couple_id", couple.id)
-      .order("completed_at", { ascending: false })
-      .limit(100);
+function Journal() {
+  const params = useSearchParams();
+  const openParam = params.get("open");
+  const dreamParam = params.get("dream");
+  const { user, couple, self, partner, loading } = useAppData();
+  const coupleId = couple?.id;
+  const { dreams } = useDreams(coupleId);
+  const actions = useActions();
 
-    const list = (data ?? []) as unknown as JournalEntry[];
-    setEntries(list);
-    const paths = list.flatMap((e) => e.completion_media?.map((m) => m.storage_path) ?? []);
-    const { thumbs, fulls } = await getSignedPhotoUrlsWithThumbs(paths);
-    setThumbUrls(thumbs);
-    setFullUrls(fulls);
-    setLoading(false);
-  }, [couple?.id]);
+  const q = useInfiniteQuery({
+    queryKey: qk.journal(coupleId ?? ""),
+    queryFn: ({ pageParam }) => fetchJournalPage(coupleId!, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.length === JOURNAL_PAGE_SIZE ? last[last.length - 1].completed_at : undefined),
+    enabled: !!coupleId,
+  });
 
+  // Deep links (?open=<check-in> from a notification, ?dream=<id>) open or
+  // highlight an entry. Re-applied whenever the param changes.
+  const [openId, setOpenId] = useState<string | null>(openParam);
+  const [lastParam, setLastParam] = useState(openParam);
+  if (openParam !== lastParam) {
+    setLastParam(openParam);
+    setOpenId(openParam);
+  }
+  const highlightRef = useRef<HTMLElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+
+  const completions = q.data?.pages.flat() ?? [];
+  const oldestLoaded = completions[completions.length - 1]?.completed_at;
+  const items: JournalItem[] = [
+    ...completions.map((c) => ({ kind: "checkin" as const, id: c.id, date: c.completed_at, c })),
+    ...dreams
+      // Only interleave dreams within the loaded window, so they don't all
+      // pile up at the end before older pages arrive.
+      .filter((d) => d.achieved_at && (!q.hasNextPage || !oldestLoaded || d.achieved_at >= oldestLoaded))
+      .map((d) => ({ kind: "dream" as const, id: d.id, date: d.achieved_at!, d })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Infinite scroll.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = q;
   useEffect(() => {
-    load();
-  }, [load]);
+    const el = sentinel.current;
+    if (!el || !hasNextPage) return;
+    const io = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting && !isFetchingNextPage) void fetchNextPage(); },
+      { rootMargin: "800px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  async function handleRemovePhoto(entry: JournalEntry) {
-    const media = entry.completion_media?.[0];
-    if (!media) return;
-    await supabase.from("completion_media").delete().eq("id", media.id);
-    load();
+  const hasItems = items.length > 0;
+  useEffect(() => {
+    if (dreamParam && hasItems) highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [dreamParam, hasItems]);
+
+  if (loading || !user || (q.isPending && !!coupleId)) return <JournalSkeleton />;
+
+  const people: People = {
+    selfId: user.id,
+    selfName: firstName(self?.display_name, "You"),
+    partnerName: firstName(partner?.display_name, "Partner"),
+  };
+  const openIndex = openId ? items.findIndex((i) => i.id === openId) : -1;
+
+  async function handleDelete(item: JournalItem) {
+    if (item.kind !== "checkin") return;
+    const ok = await confirmSheet({
+      title: "Delete this check-in?",
+      message: item.c.completion_media?.length ? "Its photo will be deleted too." : undefined,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
+    if (!ok) return;
+    const next = items[openIndex + 1] ?? items[openIndex - 1];
+    setOpenId(next && next.id !== item.id ? next.id : null);
+    await actions.deleteCheckIn(item.c);
   }
 
-  async function handleDeleteEntry(entry: JournalEntry) {
-    if (!window.confirm("Delete this check-in? This cannot be undone.")) return;
-    await supabase.from("completions").delete().eq("id", entry.id);
-    load();
+  async function handleRemovePhoto(item: JournalItem) {
+    if (item.kind !== "checkin" || !item.c.completion_media?.[0]) return;
+    const ok = await confirmSheet({ title: "Remove this photo?", confirmLabel: "Remove", destructive: true });
+    if (ok) await actions.removePhoto(item.c.id, item.c.goal_id, item.c.completion_media[0]);
   }
-
-  if (loading) {
-    return <JournalSkeleton />;
-  }
-
-  const monthLabel = entries.length > 0
-    ? format(new Date(entries[0].completed_at), "MMMM yyyy")
-    : format(new Date(), "MMMM yyyy");
-
-  const leftEntries = entries.filter((_, i) => i % 2 === 0);
-  const rightEntries = entries.filter((_, i) => i % 2 !== 0);
 
   return (
-    <div className="pb-8">
-      {/* Header */}
-      <div className="px-5 pt-14 pb-4">
-        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[26px] text-[--foreground]">Journal</h1>
-        <p className="text-[12px] text-[--muted] mt-0.5">{monthLabel}</p>
+    <div className="paper-bg min-h-screen pb-40 -mb-24">
+      <div className="px-5 pt-14 pb-2">
+        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[30px] text-foreground leading-none">Journal</h1>
+        {hasItems && (
+          <p className="font-hand text-[19px] text-muted mt-1.5">
+            {people.selfName} & {people.partnerName} — our story so far
+          </p>
+        )}
       </div>
 
-      {entries.length === 0 ? (
-        <div className="text-center py-16 text-[--muted] text-sm px-5">
-          No check-ins yet. Complete a goal to see it here.
+      {!hasItems ? (
+        <div className="flex justify-center pt-16 px-10">
+          <div className="relative bg-[#FFF1B8] px-6 py-7 -rotate-2 shadow-[0_14px_18px_-14px_rgba(60,40,20,0.45)] max-w-[260px]">
+            <span className="absolute top-2 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-primary" />
+            <p className="font-hand text-[24px] leading-tight text-[#3B332C] text-center">
+              Your story starts with your first check-in.
+            </p>
+            <p className="font-hand text-[17px] text-[#8A7B6E] text-center mt-2">Add a photo — it ends up here.</p>
+          </div>
         </div>
       ) : (
-        <div className="flex gap-2.5 px-4 pt-3">
-          {/* Left column */}
-          <div className="flex-1 flex flex-col gap-5">
-            {leftEntries.map((entry, i) => (
-              <PolaroidCard
-                key={entry.id}
-                entry={entry}
-                index={i * 2}
-                isOwn={entry.user_id === user?.id}
-                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                onRemovePhoto={handleRemovePhoto}
-                onDeleteEntry={handleDeleteEntry}
-              />
-            ))}
-          </div>
-          {/* Right column (offset) */}
-          <div className="flex-1 flex flex-col gap-5 pt-8">
-            {rightEntries.map((entry, i) => (
-              <PolaroidCard
-                key={entry.id}
-                entry={entry}
-                index={i * 2 + 1}
-                isOwn={entry.user_id === user?.id}
-                thumbUrl={entry.completion_media?.[0] ? thumbUrls[entry.completion_media[0].storage_path] : undefined}
-                fullUrl={entry.completion_media?.[0] ? fullUrls[entry.completion_media[0].storage_path] : undefined}
-                onRemovePhoto={handleRemovePhoto}
-                onDeleteEntry={handleDeleteEntry}
-              />
-            ))}
-          </div>
-        </div>
+        <Scrapbook
+          items={items}
+          people={people}
+          onOpen={setOpenId}
+          highlightId={dreamParam}
+          highlightRef={highlightRef}
+        />
+      )}
+
+      <div ref={sentinel} className="h-10" />
+      {isFetchingNextPage && (
+        <p className="font-hand text-[18px] text-muted text-center">turning the page…</p>
+      )}
+      {hasItems && !hasNextPage && (
+        <p className="font-hand text-[18px] text-muted text-center mt-6">~ the beginning ~</p>
+      )}
+
+      {openIndex >= 0 && (
+        <Lightbox
+          items={items}
+          index={openIndex}
+          people={people}
+          onIndex={(i) => setOpenId(items[i]?.id ?? null)}
+          onClose={() => setOpenId(null)}
+          onDelete={handleDelete}
+          onRemovePhoto={handleRemovePhoto}
+        />
       )}
     </div>
   );

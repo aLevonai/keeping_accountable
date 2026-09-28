@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Instrument_Serif, DM_Sans } from "next/font/google";
+import { Instrument_Serif, DM_Sans, Caveat, Amatic_SC } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -16,6 +16,20 @@ const dmSans = DM_Sans({
   variable: "--font-dm-sans",
 });
 
+// Handwriting for the journal. Caveat has no Hebrew glyphs, so Hebrew text
+// falls through to Amatic SC's Hebrew subset.
+const caveat = Caveat({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+  variable: "--font-caveat",
+});
+
+const amatic = Amatic_SC({
+  subsets: ["hebrew"],
+  weight: ["400", "700"],
+  variable: "--font-amatic",
+});
+
 export const metadata: Metadata = {
   title: "CheckMate",
   description: "Track your goals together",
@@ -28,12 +42,13 @@ export const metadata: Metadata = {
   },
 };
 
+// maximumScale stops iOS from auto-zooming into focused inputs; iOS still
+// allows pinch-zoom regardless (it ignores user-scalable for accessibility).
 export const viewport: Viewport = {
   themeColor: "#F8F4F0",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  userScalable: false,
 };
 
 export default function RootLayout({
@@ -42,11 +57,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${instrumentSerif.variable} ${dmSans.variable} h-full`}>
+    <html
+      lang="en"
+      className={`${instrumentSerif.variable} ${dmSans.variable} ${caveat.variable} ${amatic.variable} h-full`}
+    >
       <head>
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
       </head>
-      <body className="h-full bg-[--background] font-[family-name:var(--font-dm-sans)]">
+      <body className="h-full bg-background font-[family-name:var(--font-dm-sans)]">
         <Providers>{children}</Providers>
       </body>
     </html>
