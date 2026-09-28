@@ -51,7 +51,7 @@ The app uses the **Linen / CheckMate** design system:
 | `/check-in/[goalId]` | Log a check-in: optional photo + note, backdate up to 7 days; success screen shows progress then returns |
 | `/dreams` | Bucket list: Active / Achieved. Achieving opens a sheet for a photo + note → journal spread + confetti |
 | `/dreams/new`, `/dreams/[id]/edit` | Dream form (`components/dream-form.tsx`) |
-| `/journal` | Scrapbook of check-ins + achieved dreams, grouped by month, infinite scroll, full-screen swipeable lightbox (`?open=<completionId>`, `?dream=<id>`) |
+| `/journal` | Scrapbook of check-ins + achieved dreams, grouped by month, person filter, infinite scroll, full-screen swipeable lightbox (`?open=<completionId>`, `?dream=<id>`) |
 | `/profile` | Display name, partner / invite sharing, push toggle (per device), sign out |
 
 ## Key files

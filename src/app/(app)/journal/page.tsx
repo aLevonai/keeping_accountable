@@ -46,12 +46,13 @@ function Journal() {
     setLastParam(openParam);
     setOpenId(openParam);
   }
+  const [who, setWho] = useState<"all" | "me" | "partner">("all");
   const highlightRef = useRef<HTMLElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
 
   const completions = q.data?.pages.flat() ?? [];
   const oldestLoaded = completions[completions.length - 1]?.completed_at;
-  const items: JournalItem[] = [
+  const allItems: JournalItem[] = [
     ...completions.map((c) => ({ kind: "checkin" as const, id: c.id, date: c.completed_at, c })),
     ...dreams
       // Only interleave dreams within the loaded window, so they don't all
@@ -59,6 +60,14 @@ function Journal() {
       .filter((d) => d.achieved_at && (!q.hasNextPage || !oldestLoaded || d.achieved_at >= oldestLoaded))
       .map((d) => ({ kind: "dream" as const, id: d.id, date: d.achieved_at!, d })),
   ].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Person filter. Shared dreams belong to both of you, so they always show.
+  const whoId = who === "me" ? user?.id : who === "partner" ? partner?.id : undefined;
+  const items = whoId
+    ? allItems.filter((i) =>
+        i.kind === "checkin" ? i.c.user_id === whoId : i.d.owner_id === null || i.d.owner_id === whoId
+      )
+    : allItems;
 
   // Infinite scroll.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = q;
@@ -73,7 +82,7 @@ function Journal() {
     return () => io.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const hasItems = items.length > 0;
+  const hasItems = allItems.length > 0;
   useEffect(() => {
     if (dreamParam && hasItems) highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [dreamParam, hasItems]);
@@ -116,6 +125,27 @@ function Journal() {
             {people.selfName} & {people.partnerName} — our story so far
           </p>
         )}
+        {hasItems && partner && (
+          <div className="flex gap-1.5 mt-3" role="tablist" aria-label="Show entries from">
+            {([
+              ["all", "Both of us"],
+              ["me", people.selfName],
+              ["partner", people.partnerName],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={who === key}
+                onClick={() => setWho(key)}
+                className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${
+                  who === key ? "bg-foreground text-background border-foreground" : "bg-surface/70 text-muted border-border"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {!hasItems ? (
@@ -128,6 +158,10 @@ function Journal() {
             <p className="font-hand text-[17px] text-[#8A7B6E] text-center mt-2">Add a photo — it ends up here.</p>
           </div>
         </div>
+      ) : items.length === 0 ? (
+        <p className="font-hand text-[22px] text-muted text-center pt-16 px-10">
+          Nothing from {who === "me" ? people.selfName : people.partnerName} in these pages yet.
+        </p>
       ) : (
         <Scrapbook
           items={items}
