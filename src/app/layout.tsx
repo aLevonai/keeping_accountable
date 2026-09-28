@@ -26,8 +26,10 @@ const caveat = Caveat({
 
 const amatic = Amatic_SC({
   subsets: ["hebrew"],
-  weight: ["400", "700"],
+  weight: ["400"],
   variable: "--font-amatic",
+  // Only needed when a caption contains Hebrew; don't block first paint on it.
+  preload: false,
 });
 
 export const metadata: Metadata = {

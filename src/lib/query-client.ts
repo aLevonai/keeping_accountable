@@ -30,7 +30,9 @@ export function makePersister() {
   return createSyncStoragePersister({
     storage: typeof window === "undefined" ? undefined : window.localStorage,
     key: CACHE_STORAGE_KEY,
-    throttleTime: 1000,
+    // Writing the cache is a synchronous JSON.stringify + localStorage write on
+    // the main thread; batch bursts (tab switch refetches, realtime) into one.
+    throttleTime: 3000,
   });
 }
 

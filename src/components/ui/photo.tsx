@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useSignedUrl, requestSignedUrl } from "@/lib/photo-urls";
 import { thumbPath } from "@/utils/storage";
 
+// Paths already displayed this session: show them immediately on remount
+// (tab switches) instead of fading in again.
+const loadedPaths = new Set<string>();
+
 // Private-bucket photo. Prefers the 600px thumbnail when `thumb` is set and
 // recovers on error: first re-sign the URL (it may have expired), then fall
 // back to the full-size file (older photos have no thumbnail).
@@ -26,8 +30,8 @@ export function Photo({
 }) {
   const [useFull, setUseFull] = useState(!thumb);
   const [resigned, setResigned] = useState<string | null>(null);
-  const [loaded, setLoaded] = useState(false);
   const activePath = useFull ? path : thumbPath(path);
+  const [loaded, setLoaded] = useState(() => loadedPaths.has(activePath));
   const src = useSignedUrl(activePath);
 
   function handleError() {
@@ -50,8 +54,8 @@ export function Photo({
       decoding="async"
       draggable={false}
       className={className}
-      style={{ ...style, opacity: loaded ? 1 : 0, transition: "opacity 180ms ease-out" }}
-      onLoad={(e) => { setLoaded(true); onLoad?.(e); }}
+      style={{ ...style, opacity: loaded ? 1 : 0, transition: loaded ? undefined : "opacity 180ms ease-out" }}
+      onLoad={(e) => { loadedPaths.add(activePath); setLoaded(true); onLoad?.(e); }}
       onError={handleError}
     />
   );
