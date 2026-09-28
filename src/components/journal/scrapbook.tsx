@@ -1,11 +1,12 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useEffect, useState } from "react";
 import { format } from "date-fns";
 import type { DreamRow, JournalCompletion } from "@/types/database";
 import { Photo } from "@/components/ui/photo";
 import { useIsUploading } from "@/lib/actions";
 import { seeded, pick, between } from "@/utils/seeded";
+import { Tape, Tapes, PaperClip } from "@/components/ui/paper";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -25,85 +26,16 @@ export function authorName(item: JournalItem, people: People): string {
   return uid && uid === people.selfId ? people.selfName : people.partnerName;
 }
 
-// ── Paper props ──────────────────────────────────────────────────────────
-
-const WASHI = [
-  { base: "rgba(240,190,150,0.78)", ink: "rgba(255,255,255,0.35)" }, // peach
-  { base: "rgba(170,208,188,0.78)", ink: "rgba(255,255,255,0.35)" }, // mint
-  { base: "rgba(200,190,228,0.75)", ink: "rgba(255,255,255,0.35)" }, // lavender
-  { base: "rgba(244,222,140,0.75)", ink: "rgba(255,255,255,0.4)" },  // butter
-  { base: "rgba(170,202,228,0.75)", ink: "rgba(255,255,255,0.35)" }, // sky
-  { base: "rgba(236,178,184,0.75)", ink: "rgba(255,255,255,0.35)" }, // rose
-] as const;
-
-const PATTERNS = ["plain", "stripes", "dots", "grid"] as const;
-
-function tapeBackground(color: (typeof WASHI)[number], pattern: (typeof PATTERNS)[number]): string {
-  switch (pattern) {
-    case "stripes":
-      return `repeating-linear-gradient(45deg, ${color.ink} 0 3px, transparent 3px 7px), ${color.base}`;
-    case "dots":
-      return `radial-gradient(${color.ink} 1.2px, transparent 1.4px) 0 0 / 6px 6px, ${color.base}`;
-    case "grid":
-      return `linear-gradient(${color.ink} 1px, transparent 1px) 0 0 / 5px 5px, linear-gradient(90deg, ${color.ink} 1px, transparent 1px) 0 0 / 5px 5px, ${color.base}`;
-    default:
-      return color.base;
-  }
-}
-
-function Tape({ r, style }: { r: () => number; style: React.CSSProperties }) {
-  const color = pick(r, WASHI);
-  const pattern = pick(r, PATTERNS);
-  return (
-    <span
-      aria-hidden
-      className="absolute z-[2] block"
-      style={{
-        width: 54,
-        height: 17,
-        background: tapeBackground(color, pattern),
-        boxShadow: "0 1px 1.5px rgba(0,0,0,0.08)",
-        // Torn ends
-        clipPath: "polygon(2% 8%, 8% 0, 16% 10%, 26% 0, 38% 8%, 50% 0, 62% 9%, 74% 0, 86% 8%, 94% 0, 100% 10%, 98% 92%, 90% 100%, 80% 90%, 68% 100%, 56% 92%, 44% 100%, 32% 91%, 20% 100%, 10% 92%, 0 100%)",
-        ...style,
-      }}
-    />
-  );
-}
-
-function Tapes({ r }: { r: () => number }) {
-  const style = Math.floor(r() * 4);
-  if (style === 0) {
-    return <Tape r={r} style={{ top: -9, left: "50%", transform: `translateX(-50%) rotate(${between(r, -6, 6)}deg)` }} />;
-  }
-  if (style === 1) {
-    return (
-      <>
-        <Tape r={r} style={{ top: -6, left: -16, transform: "rotate(-38deg)", width: 48 }} />
-        <Tape r={r} style={{ top: -6, right: -16, transform: "rotate(38deg)", width: 48 }} />
-      </>
-    );
-  }
-  if (style === 2) {
-    return <Tape r={r} style={{ top: -8, left: -12, transform: `rotate(${between(r, -40, -28)}deg)`, width: 50 }} />;
-  }
-  return <Tape r={r} style={{ top: -8, right: -12, transform: `rotate(${between(r, 28, 40)}deg)`, width: 50 }} />;
-}
-
-function PaperClip({ color = "#9AA3AB" }: { color?: string }) {
-  return (
-    <svg aria-hidden width="16" height="38" viewBox="0 0 16 38" className="absolute -top-3 right-5 z-[2]" fill="none">
-      <path
-        d="M11 9v19a4 4 0 0 1-8 0V6a3 3 0 0 1 6 0v20a1.5 1.5 0 0 1-3 0V10"
-        stroke={color}
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 const handText = "font-hand leading-[1.1]";
+
+// Entries already shown this session. New ones (e.g. a check-in that just
+// arrived) animate in; returning to the tab doesn't replay every card.
+const shown = new Set<string>();
+function useEnterClass(id: string): string {
+  const [isNew] = useState(() => !shown.has(id));
+  useEffect(() => { shown.add(id); }, [id]);
+  return isNew ? "animate-journal-in" : "";
+}
 
 // ── Check-in cards ───────────────────────────────────────────────────────
 
@@ -202,7 +134,7 @@ function Print({ item, people, onOpen }: CardProps) {
   );
 }
 
-const STICKY = ["#FFF1B8", "#FAD9CF", "#D6EDDC", "#D7E6F2", "#EFE0F5"] as const;
+export const STICKY = ["#FFF1B8", "#FAD9CF", "#D6EDDC", "#D7E6F2", "#EFE0F5"] as const;
 
 function IndexCard({ item, people, onOpen }: CardProps) {
   const r = seeded(item.id + ":card");
@@ -247,7 +179,7 @@ function StickyNote({ item, people, onOpen }: CardProps) {
   );
 }
 
-const INKS = ["#B5543A", "#3F6C8C", "#4F7A5E", "#7A5A8C"] as const;
+export const INKS = ["#B5543A", "#3F6C8C", "#4F7A5E", "#7A5A8C"] as const;
 
 function Stamp({ item, people, onOpen }: CardProps) {
   const r = seeded(item.id + ":card");
@@ -257,7 +189,7 @@ function Stamp({ item, people, onOpen }: CardProps) {
   return (
     <button onClick={onOpen} className="relative block mx-auto text-center py-1" style={{ width: "86%" }}>
       <div
-        className="rounded-[10px] px-2.5 py-2 mix-blend-multiply"
+        className="rounded-[10px] px-2.5 py-2"
         style={{ border: `2px solid ${ink}`, color: ink, boxShadow: `inset 0 0 0 2px #fbf7f1, inset 0 0 0 3px ${ink}`, opacity: 0.88 }}
       >
         <p className="font-mono text-[9px] tracking-[0.2em] uppercase">✓ done · {date}</p>
@@ -299,6 +231,7 @@ function estimateHeight(item: CardProps["item"], variant: Variant): number {
 }
 
 function CheckInCard(props: CardProps) {
+  const enter = useEnterClass(props.item.id);
   const variant = variantFor(props.item);
   const r = seeded(props.item.id + ":place");
   const tilt =
@@ -309,7 +242,7 @@ function CheckInCard(props: CardProps) {
   const gap = between(r, 14, 30);
   return (
     <div
-      className="animate-journal-in"
+      className={enter}
       style={{ transform: `translateX(${nudge}px) rotate(${tilt}deg)`, marginTop: gap }}
     >
       {variant === "polaroid" && <Polaroid {...props} />}
@@ -329,10 +262,11 @@ function isWideFeature(item: CardProps["item"]): boolean {
 }
 
 function WidePrint(props: CardProps) {
+  const enter = useEnterClass(props.item.id);
   const r = seeded(props.item.id + ":place");
   const side = r() < 0.5 ? "mr-auto" : "ml-auto";
   return (
-    <div className={`w-[86%] ${side} animate-journal-in`} style={{ transform: `rotate(${between(r, -2.2, 2.2)}deg)`, marginTop: between(r, 18, 30) }}>
+    <div className={`w-[86%] ${side} ${enter}`} style={{ transform: `rotate(${between(r, -2.2, 2.2)}deg)`, marginTop: between(r, 18, 30) }}>
       <Polaroid {...props} />
     </div>
   );
@@ -369,6 +303,7 @@ const DreamSpread = forwardRef<HTMLElement, {
   onOpen: () => void;
 }>(function DreamSpread({ item, people, highlighted, onOpen }, ref) {
   const { d } = item;
+  const enter = useEnterClass(d.id);
   const r = seeded(d.id + ":dream");
   const uploading = useIsUploading(d.id);
   const aspect =
@@ -385,7 +320,7 @@ const DreamSpread = forwardRef<HTMLElement, {
   return (
     <article
       ref={ref}
-      className={`relative mx-4 mt-10 mb-4 animate-journal-in ${highlighted ? "animate-highlight" : ""}`}
+      className={`relative mx-4 mt-10 mb-4 ${enter} ${highlighted ? "animate-highlight" : ""}`}
       style={{ transform: `rotate(${between(r, -1.4, 1.4)}deg)` }}
     >
       <button
@@ -542,7 +477,7 @@ export function Scrapbook({
   return (
     <div>
       {months.map((m) => (
-        <section key={m.key}>
+        <section key={m.key} style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1400px" }}>
           <MonthHeader date={m.date} count={m.items.length} />
           {toBlocks(m.items).map((b) =>
             b.type === "grid" ? (

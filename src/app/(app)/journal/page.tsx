@@ -2,11 +2,10 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useInfiniteQuery } from "@tanstack/react-query";
 import { useAppData } from "@/contexts/app-data";
 import { useDreams } from "@/hooks/use-dreams";
 import { useActions } from "@/lib/actions";
-import { qk, fetchJournalPage, JOURNAL_PAGE_SIZE } from "@/lib/queries";
+import { useJournal } from "@/hooks/use-journal";
 import { JournalSkeleton } from "@/components/ui/page-skeleton";
 import { confirmSheet } from "@/components/ui/feedback";
 import { firstName } from "@/components/ui/bits";
@@ -30,13 +29,7 @@ function Journal() {
   const { dreams } = useDreams(coupleId);
   const actions = useActions();
 
-  const q = useInfiniteQuery({
-    queryKey: qk.journal(coupleId ?? ""),
-    queryFn: ({ pageParam }) => fetchJournalPage(coupleId!, pageParam),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) => (last.length === JOURNAL_PAGE_SIZE ? last[last.length - 1].completed_at : undefined),
-    enabled: !!coupleId,
-  });
+  const q = useJournal(coupleId);
 
   // Deep links (?open=<check-in> from a notification, ?dream=<id>) open or
   // highlight an entry. Re-applied whenever the param changes.

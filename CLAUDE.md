@@ -34,6 +34,7 @@ The app uses the **Linen / CheckMate** design system:
 - **Goal color chips**: each goal has a `color` field (hex string). UI uses 11×11px rounded squares (not emoji) as the visual anchor
 - **Dots**: filled/empty circles showing progress (max 8 dots, then `count/target` text) — `components/ui/bits.tsx`
 - **Section dividers**: `10px bold uppercase muted` label + count badge + horizontal rule — `SectionDivider` in `bits.tsx`
+- **Home + Journal** share the scrapbook materials in `components/ui/paper.tsx` (washi tape, clips) and `components/home/paper-bits.tsx` (tally marks, hand-drawn checkbox, torn edge)
 - **Journal**: scrapbook on paper texture — polaroids, label-maker prints, index cards, sticky notes, ink stamps, washi tape; every entry gets a stable pseudo-random tilt/tape/variant from its id (`utils/seeded.ts`). Achieved dreams render as full-width "Dream achieved" spreads
 - No emoji in UI chrome; no `alert()`/`confirm()` — use `toast()` / `confirmSheet()`
 
@@ -44,7 +45,7 @@ The app uses the **Linen / CheckMate** design system:
 | `/welcome` | OTP email sign-in |
 | `/onboard` | Set display name, then create a couple (share invite link) or join one (code prefilled from a `/join` link) |
 | `/join/[code]` | Public invite link — remembers the code, routes through sign-in to the join step |
-| `/home` | Daily briefing: this-week score card, your goals (tap + to check in, hold + to log instantly), partner's week, shared dreams |
+| `/home` | Scrapbook front page: greeting, torn-paper "this week" card with tally marks, goal list on a notebook page (tap + to check in, hold + to log instantly), latest journal polaroid + partner's-week sticky note, dreams as luggage tags |
 | `/goals` | Sections Yours / Together / [Partner's] / Done ✓ — color chip, cadence, Dots, streak |
 | `/goals/new`, `/goals/[id]/edit` | Goal form (`components/goal-form.tsx`): title, cadence, target, shared + joint/separate, personal reminder |
 | `/goals/[id]` | Goal detail: progress + streak calendar, check-in / nudge, history grouped by period, per-check-in actions sheet |
@@ -66,6 +67,7 @@ src/
 │   ├── join/[code]/            # invite links
 │   ├── welcome/, onboard/, auth/callback/
 │   └── globals.css             # tokens, paper textures, animations
+├── components/app-shell.tsx   # Pull-to-refresh + swipe left/right between the five tabs
 ├── contexts/app-data.tsx       # AppDataProvider: session → couple → goals queries + the realtime channel
 ├── lib/
 │   ├── queries.ts              # Query keys (qk) + every fetcher
@@ -73,7 +75,7 @@ src/
 │   ├── query-client.ts         # QueryClient defaults + localStorage persister
 │   ├── photo-urls.ts           # Signed-URL cache (persisted, batched) + useSignedUrl()
 │   └── supabase/{client,server}.ts
-├── hooks/                      # use-auth (session query + signOut), use-goal, use-dreams, use-push
+├── hooks/                      # use-auth (session query + signOut), use-goal, use-dreams, use-journal, use-push
 ├── components/
 │   ├── ui/bits.tsx             # SectionDivider, Dots, Avatar, Toggle, BackButton, PageTitle, getInitial/firstName
 │   ├── ui/feedback.tsx         # toast(), confirmSheet(), FeedbackHost
@@ -83,7 +85,7 @@ src/
 │   ├── check-in-button.tsx     # "+" — tap to check in, hold to quick-log with Undo
 │   ├── journal/scrapbook.tsx   # Journal layout + card variants + dream spread
 │   └── journal/lightbox.tsx    # Full-screen viewer
-├── proxy.ts                    # Route protection (Next 16 "middleware"): unauthed → /welcome
+├── proxy.ts                    # Route protection (Next 16 "middleware"): no session cookie → /welcome. Uses getSession (no network) and skips prefetches
 ├── utils/
 │   ├── period.ts               # getPeriodRange(), countCompletionsInPeriod(), streaks — weekStartsOn: 0
 │   ├── goal-progress.ts        # goalProgress(): the ONE place that decides counts/done for personal/joint/separate goals
@@ -128,6 +130,8 @@ Key design decisions:
 - `useAppData()` gives `{ user, couple, self, partner, goals, loading, goalsLoading, refetch }` in `(app)/` routes; `useDreams(couple?.id)`, `useGoal(id)`, `useGoalHistory(id)` for the rest
 - Realtime is one channel in `AppDataProvider`; it patches/invalidates the query cache. New tables must be added to the `supabase_realtime` publication (see 0010)
 - Dynamic routes under `(app)` are split into a server `page.tsx` (with `generateStaticParams() { return [] }`) and a client component, so they're static-on-demand and prefetchable. Avoid `force-dynamic`
+- Prefetched static pages stay fresh for a day (`experimental.staleTimes.static` in next.config.ts) — don't make `(app)` pages depend on request data
+- Horizontal scrollers inside tab pages get `data-no-swipe` so they don't trigger tab swipes
 - Loading states only when there's no cached data at all (`isPending`); never block a page on a background refetch
 - `goal.color` is a hex string — inline styles, not Tailwind classes
 - Text a user typed gets `dir="auto"` (Hebrew/English)
