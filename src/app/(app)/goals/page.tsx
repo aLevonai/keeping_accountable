@@ -1,14 +1,20 @@
 "use client";
 
-import { useAppData } from "@/contexts/app-data";
 import Link from "next/link";
-import { Plus, Check } from "lucide-react";
+import { Plus } from "lucide-react";
+import { useAppData } from "@/contexts/app-data";
+import { usePrefetchGoalHistory } from "@/hooks/use-goal";
 import { goalProgress, goalStreak, cadenceUnit } from "@/utils/goal-progress";
+import { getPeriodLabel } from "@/utils/period";
+import { seeded, between } from "@/utils/seeded";
 import type { GoalWithCompletions } from "@/types/database";
 import { GoalsSkeleton } from "@/components/ui/page-skeleton";
-import { Avatar, Dots, SectionDivider, PageTitle, firstName } from "@/components/ui/bits";
+import { Avatar, firstName } from "@/components/ui/bits";
+import { PaperPage, PaperHeader, HandHeading, Tapes, Pin, Punches, InkStamp } from "@/components/ui/paper";
 import { CheckInButton } from "@/components/check-in-button";
-import { usePrefetchGoalHistory } from "@/hooks/use-goal";
+
+// Goals as index cards: taped or pinned to the page, progress punched through
+// the card, and a green DONE stamp once the period's target is hit.
 
 const CADENCE_LABEL: Record<string, string> = {
   daily: "daily",
@@ -24,113 +30,109 @@ function GoalCard({
   partnerId,
   selfName,
   partnerName,
-  inDoneSection,
 }: {
   goal: GoalWithCompletions;
   userId: string;
   partnerId?: string;
   selfName?: string;
   partnerName?: string;
-  inDoneSection: boolean;
 }) {
   const p = goalProgress(goal, userId, partnerId);
   const prefetchHistory = usePrefetchGoalHistory();
-  const canCheckIn = !p.isPartners;
-  const chipColor = goal.color ?? "#374151";
-  const done = inDoneSection || p.done;
   const streak = goalStreak(goal, userId);
-
-  const cardBg = done ? "var(--surface)" : `color-mix(in srgb, ${chipColor} 5%, transparent)`;
-  const cardBorder = done ? "var(--border)" : `color-mix(in srgb, ${chipColor} 19%, transparent)`;
-  const opacity = p.isPartners ? 0.8 : inDoneSection ? 0.6 : 1;
+  const r = seeded(goal.id + ":card");
+  const tilt = between(r, -1.3, 1.3);
+  const ink = p.isPartners ? "var(--partner-accent)" : "var(--primary)";
+  const mode = p.mode === "joint" ? " · together" : p.mode === "separate" ? " · each of us" : "";
+  const left = Math.max(0, p.target - (p.mode === "separate" ? p.myCount : p.total));
 
   return (
-    <div
-      className="relative rounded-[14px] border p-3.5 flex flex-col gap-2.5"
-      style={{ background: cardBg, borderColor: cardBorder, opacity }}
-    >
-      {/* Whole card opens the goal; the + button sits above this link. */}
-      <Link
-        href={`/goals/${goal.id}`}
-        onPointerDown={() => prefetchHistory(goal.id)}
-        className="absolute inset-0 rounded-[14px] active:bg-black/[0.03]"
-        aria-label={`Open ${goal.title}`}
-      />
+    <div className="relative mx-5 mb-6" style={{ transform: `rotate(${tilt}deg)` }}>
+      <div
+        className="relative shadow-[0_2px_5px_rgba(60,40,20,0.12),0_12px_20px_-14px_rgba(60,40,20,0.35)]"
+        style={{
+          // Index card: red header rule, faint blue lines below.
+          background: p.isPartners
+            ? "linear-gradient(#F4F8FB 0 46px, rgba(74,122,155,0.35) 46px 47px, #F4F8FB 47px)"
+            : "linear-gradient(#FFFDF8 0 46px, rgba(214,120,120,0.45) 46px 47px, transparent 47px), repeating-linear-gradient(#FFFDF8 0 23px, rgba(120,160,200,0.22) 23px 24px)",
+          backgroundColor: p.isPartners ? "#F4F8FB" : "#FFFDF8",
+        }}
+      >
+        {p.isPartners ? <Pin color="var(--partner-accent)" className="-top-1 left-1/2 -translate-x-1/2" /> : <Tapes r={r} />}
 
-      <div className="flex items-start justify-between gap-2 pointer-events-none">
-        <div className="flex items-start gap-2.5 flex-1 min-w-0">
-          <div className="flex-shrink-0 mt-[3px]" style={{ width: 11, height: 11, borderRadius: 3, background: chipColor }} />
-          <div className="flex-1 min-w-0">
-            <span className="text-[14px] font-medium block truncate" style={{ color: done ? "var(--muted)" : "var(--foreground)" }}>
-              {goal.title}
-            </span>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[10px] text-muted">{CADENCE_LABEL[goal.cadence] ?? goal.cadence}</span>
-              {p.isShared && (
-                <>
-                  <span className="text-[10px] text-muted">·</span>
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-primary">Together</span>
-                </>
-              )}
+        {/* Whole card opens the goal; the + button sits above this link. */}
+        <Link
+          href={`/goals/${goal.id}`}
+          onPointerDown={() => prefetchHistory(goal.id)}
+          className="absolute inset-0 active:bg-black/[0.03]"
+          aria-label={`Open ${goal.title}`}
+        />
+
+        <div className="px-4 pt-3 pb-3.5 pointer-events-none">
+          <div className="flex items-start gap-3 h-[40px]">
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[9px] tracking-[0.16em] uppercase text-muted truncate">
+                {CADENCE_LABEL[goal.cadence] ?? goal.cadence}{mode}
+              </p>
+              <p
+                className={`text-[16px] font-medium truncate mt-0.5 ${p.done ? "text-muted" : "text-foreground"}`}
+                dir="auto"
+              >
+                {goal.title}
+              </p>
             </div>
-          </div>
-        </div>
-
-        {canCheckIn ? (
-          <div className="flex items-center gap-1 flex-shrink-0 pointer-events-auto relative">
-            {p.myDone && !inDoneSection && (
-              <div className="w-[20px] h-[20px] rounded-full bg-success-light flex items-center justify-center flex-shrink-0">
-                <Check size={9} className="text-success" />
+            {!p.isPartners && (
+              <div className="pointer-events-auto relative flex-shrink-0">
+                <CheckInButton goal={goal} subdued={p.myDone} size={30} />
               </div>
             )}
-            <CheckInButton goal={goal} subdued={inDoneSection || p.myDone} />
           </div>
-        ) : done ? (
-          <div className="w-[26px] h-[26px] rounded-full bg-success-light flex items-center justify-center flex-shrink-0">
-            <Check size={12} className="text-success" />
-          </div>
-        ) : null}
-      </div>
 
-      {goal.cadence !== "once" && (
-        <div className="pointer-events-none">
-          {p.mode === "separate" ? (
-            <div className="flex flex-col gap-1.5 pl-[19px]">
-              <div className="flex items-center gap-1.5">
-                <Avatar name={selfName} who="self" size={14} color={chipColor} />
-                <Dots count={p.myCount} target={p.target} color={p.myDone ? "var(--success)" : chipColor} />
-                {p.myDone && <Check size={10} className="text-success flex-shrink-0" />}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Avatar name={partnerName} who="partner" size={14} />
-                <Dots
-                  count={p.partnerCount}
-                  target={p.target}
-                  color={p.partnerCount >= p.target ? "var(--success)" : "var(--partner-accent)"}
-                />
-                {p.partnerCount >= p.target && <Check size={10} className="text-success flex-shrink-0" />}
-              </div>
-            </div>
-          ) : (
-            <div className="pl-[19px]">
-              <Dots
-                count={p.total}
-                target={p.target}
-                color={done ? "var(--success)" : p.isPartners ? "var(--partner-accent)" : chipColor}
-              />
+          {goal.cadence !== "once" && (
+            <div className="mt-3 flex flex-col gap-2">
+              {p.mode === "separate" ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Avatar name={selfName} who="self" size={16} />
+                    <Punches count={p.myCount} target={p.target} color={p.myDone ? "var(--success)" : "var(--primary)"} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Avatar name={partnerName} who="partner" size={16} />
+                    <Punches
+                      count={p.partnerCount}
+                      target={p.target}
+                      color={p.partnerCount >= p.target ? "var(--success)" : "var(--partner-accent)"}
+                    />
+                  </div>
+                </>
+              ) : (
+                <Punches count={p.total} target={p.target} color={p.done ? "var(--success)" : ink} />
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {streak >= 2 && goal.cadence !== "once" && (
-        <div className="pl-[19px] flex items-center gap-1.5 pointer-events-none">
-          <div style={{ width: 5, height: 5, borderRadius: "50%", background: done ? "var(--success)" : chipColor, flexShrink: 0 }} />
-          <span className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: done ? "var(--success)" : chipColor }}>
-            {streak} {cadenceUnit(goal.cadence)} streak
-          </span>
+          <div className="flex items-end justify-between mt-2.5 min-h-[20px]">
+            <p className="font-hand text-[17px] leading-none text-[#8A7B6E]">
+              {goal.cadence === "once"
+                ? p.done ? "done for good" : "whenever you're ready"
+                : p.done
+                  ? `all ${p.target} ${getPeriodLabel(goal.cadence)}`
+                  : `${left} to go ${getPeriodLabel(goal.cadence)}`}
+            </p>
+            {streak >= 2 && goal.cadence !== "once" && (
+              <InkStamp color={p.done ? "var(--success)" : ink} rotate={-4}>
+                {streak} {cadenceUnit(goal.cadence)} streak
+              </InkStamp>
+            )}
+          </div>
         </div>
-      )}
+
+        {p.done && (
+          <div className="absolute right-16 top-3 pointer-events-none">
+            <InkStamp size="lg" rotate={-14}>Done</InkStamp>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -154,13 +156,12 @@ export default function GoalsPage() {
   const mine = goals.filter((g) => g.owner_id === user.id);
   const shared = goals.filter((g) => g.owner_id === null);
   const partners = partner ? goals.filter((g) => g.owner_id === partner.id) : [];
-
   const sections = [
-    { label: "Yours", items: mine.filter((g) => !isDone(g)) },
-    { label: "Together", items: shared.filter((g) => !isDone(g)) },
-    { label: `${firstName(partner?.display_name, "Partner")}'s`, items: partners.filter((g) => !isDone(g)) },
+    { label: "yours", items: mine.filter((g) => !isDone(g)) },
+    { label: "together", items: shared.filter((g) => !isDone(g)) },
+    { label: `${firstName(partner?.display_name, "partner")}'s`, items: partners.filter((g) => !isDone(g)) },
+    { label: "done for now", items: [...mine, ...shared, ...partners].filter(isDone) },
   ];
-  const allDone = [...mine, ...shared, ...partners].filter(isDone);
 
   const cardProps = {
     userId: user.id,
@@ -170,53 +171,50 @@ export default function GoalsPage() {
   };
 
   return (
-    <div className="flex flex-col px-4 pt-14 pb-4">
-      <div className="flex items-center justify-between px-1">
-        <PageTitle>Goals</PageTitle>
-        <Link
-          href="/goals/new"
-          aria-label="New goal"
-          className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white active:scale-95 transition-transform duration-150"
-        >
-          <Plus size={18} />
-        </Link>
-      </div>
+    <PaperPage>
+      <PaperHeader
+        title="Goals"
+        subtitle="what we're working on"
+        action={
+          <Link
+            href="/goals/new"
+            aria-label="New goal"
+            className="flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-[0_3px_8px_rgba(196,112,79,0.35)] active:scale-95 transition-transform"
+          >
+            <Plus size={19} />
+          </Link>
+        }
+      />
 
       {goals.length === 0 ? (
-        <div className="flex flex-col items-center py-16 gap-3 text-center">
-          <p className="text-muted text-sm">No goals yet.</p>
-          <Link href="/goals/new" className="text-primary font-semibold text-sm">Add one</Link>
+        <div className="flex justify-center pt-16">
+          <Link
+            href="/goals/new"
+            className="relative bg-[#FFF1B8] px-6 pt-7 pb-5 -rotate-2 shadow-[0_14px_18px_-14px_rgba(60,40,20,0.45)] max-w-[240px] text-center"
+          >
+            <Pin className="top-2 left-1/2 -translate-x-1/2" />
+            <p className="font-hand text-[24px] leading-tight text-[#3B332C]">No goals yet.</p>
+            <p className="font-hand text-[19px] text-primary mt-1">add the first one →</p>
+          </Link>
         </div>
       ) : (
-        <div>
+        <>
           {sections.map(
             (s) =>
               s.items.length > 0 && (
-                <div key={s.label}>
-                  <SectionDivider label={s.label} count={s.items.length} />
-                  <div className="flex flex-col gap-2">
-                    {s.items.map((g) => (
-                      <GoalCard key={g.id} goal={g} inDoneSection={false} {...cardProps} />
-                    ))}
-                  </div>
-                </div>
+                <section key={s.label}>
+                  <HandHeading count={s.items.length}>{s.label}</HandHeading>
+                  {s.items.map((g) => (
+                    <GoalCard key={g.id} goal={g} {...cardProps} />
+                  ))}
+                </section>
               )
           )}
-
-          {allDone.length > 0 && (
-            <>
-              <SectionDivider label="Done ✓" count={allDone.length} />
-              <div className="flex flex-col gap-2">
-                {allDone.map((g) => (
-                  <GoalCard key={g.id} goal={g} inDoneSection {...cardProps} />
-                ))}
-              </div>
-            </>
-          )}
-
-          <p className="text-[11px] text-muted text-center mt-6">Tip: press and hold + to log without a photo</p>
-        </div>
+          <p className="font-hand text-[18px] text-muted text-center mt-4 px-8">
+            psst — hold the + to log without a photo
+          </p>
+        </>
       )}
-    </div>
+    </PaperPage>
   );
 }

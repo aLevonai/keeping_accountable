@@ -46,9 +46,9 @@ export function EditGoal({ id }: { id: string }) {
     : null;
 
   return (
-    <div className="px-5 pt-14 pb-8 min-h-screen bg-background">
+    <div className="paper-bg px-5 pt-14 pb-40 -mb-24 min-h-screen">
       <BackButton fallback={`/goals/${id}`} />
-      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-foreground mb-6">Edit Goal</h1>
+      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] leading-none text-foreground mb-7">Edit Goal</h1>
       {initial ? (
         <GoalForm
           initial={initial}

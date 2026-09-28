@@ -15,9 +15,8 @@ import { HomeSkeleton } from "@/components/ui/page-skeleton";
 import { AppLogo } from "@/components/ui/logo";
 import { Avatar, firstName } from "@/components/ui/bits";
 import { Photo } from "@/components/ui/photo";
-import { Tape, Tapes } from "@/components/ui/paper";
 import { CheckInButton } from "@/components/check-in-button";
-import { Tally, HandCheckbox, tornBottom, Squiggle } from "@/components/home/paper-bits";
+import { Tape, Tapes, Tally, HandCheckbox, tornBottom, Squiggle } from "@/components/ui/paper";
 
 // Home is the front page of the couple's scrapbook: a torn-paper scorecard for
 // the week, the goal list on a notebook page, the latest memory pinned next to

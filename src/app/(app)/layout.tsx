@@ -8,7 +8,7 @@ import { AppShell } from "@/components/app-shell";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppDataProvider>
-      <div className="flex flex-col min-h-screen bg-background">
+      <div className="flex flex-col min-h-screen paper-bg">
         <main className="flex-1 pb-24">
           <AppShell>{children}</AppShell>
         </main>

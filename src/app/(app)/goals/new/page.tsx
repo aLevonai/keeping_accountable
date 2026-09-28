@@ -10,9 +10,9 @@ export default function NewGoalPage() {
   const { createGoal } = useActions();
 
   return (
-    <div className="px-5 pt-14 pb-8 min-h-screen bg-background">
+    <div className="paper-bg px-5 pt-14 pb-40 -mb-24 min-h-screen">
       <BackButton fallback="/goals" />
-      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-foreground mb-6">New Goal</h1>
+      <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] leading-none text-foreground mb-7">New Goal</h1>
       <GoalForm
         initial={DEFAULT_GOAL_VALUES}
         submitLabel="Create goal"

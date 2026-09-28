@@ -11,6 +11,8 @@ import { goalProgress } from "@/utils/goal-progress";
 import { getPeriodLabel } from "@/utils/period";
 import { toast } from "@/components/ui/feedback";
 import { BackButton, firstName } from "@/components/ui/bits";
+import { Tapes } from "@/components/ui/paper";
+import { seeded } from "@/utils/seeded";
 
 const BACKDATE_DAYS = 7;
 
@@ -103,32 +105,32 @@ export function CheckIn({ goalId }: { goalId: string }) {
     const complete = goal.cadence !== "once" && p.myDone;
 
     return (
-      <button onClick={leave} className="min-h-screen w-full flex flex-col items-center justify-center gap-4 px-8 bg-background">
+      <button onClick={leave} className="paper-bg min-h-screen w-full flex flex-col items-center justify-center gap-4 px-8">
         <div
           className="w-16 h-16 rounded-full flex items-center justify-center animate-pop-in"
           style={{ background: complete ? "var(--success-light)" : `color-mix(in srgb, ${color} 16%, transparent)` }}
         >
           <Check size={26} style={{ color: complete ? "var(--success)" : color }} />
         </div>
-        <p className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-foreground text-center">
+        <p className="font-[family-name:var(--font-instrument-serif)] italic text-[30px] text-foreground text-center">
           {complete ? "Target hit!" : "Logged"}
         </p>
         <p className="text-[15px] text-foreground text-center font-medium">{goal.title}</p>
-        <p className="text-[13px] text-muted text-center">{line}</p>
-        {photo && <p className="text-[12px] text-muted text-center">Your photo is uploading in the background</p>}
+        <p className="font-hand text-[21px] leading-tight text-[#6E6053] text-center">{line}</p>
+        {photo && <p className="font-hand text-[18px] text-muted text-center">your photo is on its way to the journal…</p>}
       </button>
     );
   }
 
   return (
-    <div className="px-5 pt-14 pb-8 min-h-screen bg-background">
+    <div className="paper-bg px-5 pt-14 pb-40 -mb-24 min-h-screen">
       <BackButton />
 
       <div className="flex items-center gap-3 mb-6">
         <div style={{ width: 48, height: 48, borderRadius: 10, background: goal?.color ?? "var(--border)", flexShrink: 0 }} />
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Logging</p>
-          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[22px] text-foreground leading-tight truncate">
+          <p className="font-mono text-[9px] tracking-[0.18em] uppercase text-muted">Logging</p>
+          <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[28px] text-foreground leading-tight truncate">
             {goal?.title ?? " "}
           </h1>
         </div>
@@ -137,9 +139,10 @@ export function CheckIn({ goalId }: { goalId: string }) {
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         <div>
           {preview ? (
-            <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden border border-border">
+            <div className="relative bg-white p-2.5 pb-8 -rotate-1 shadow-[0_2px_6px_rgba(60,40,20,0.16),0_16px_24px_-16px_rgba(60,40,20,0.4)]">
+              <Tapes r={seeded(goalId + ":checkin")} />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+              <img src={preview} alt="Preview" className="w-full aspect-[4/3] object-cover" />
               <button
                 type="button"
                 onClick={() => { setPhoto(null); setPreview(null); }}
@@ -152,17 +155,20 @@ export function CheckIn({ goalId }: { goalId: string }) {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="w-full aspect-[4/3] rounded-2xl border-[1.5px] border-dashed border-border bg-surface flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              className="relative w-full bg-white p-2.5 pb-8 -rotate-1 shadow-[0_2px_6px_rgba(60,40,20,0.16),0_16px_24px_-16px_rgba(60,40,20,0.4)] active:scale-[0.98] transition-transform"
             >
-              <Camera size={24} className="text-muted" strokeWidth={1.5} />
-              <span className="text-[13px] text-muted">Add a photo</span>
+              <Tapes r={seeded(goalId + ":checkin")} />
+              <span className="w-full aspect-[4/3] bg-[#EEE7DE] flex flex-col items-center justify-center gap-2">
+                <Camera size={26} className="text-[#8A7B6E]" strokeWidth={1.5} />
+                <span className="font-hand text-[21px] leading-none text-[#8A7B6E]">tap to add a photo</span>
+              </span>
             </button>
           )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-[12px] font-medium text-muted">When</span>
+          <span className="font-hand text-[20px] leading-none text-[#6E6053]">when?</span>
           <div className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-5 px-5">
             {days.map((d) => {
               const active = isSameDay(d, day);
@@ -187,7 +193,8 @@ export function CheckIn({ goalId }: { goalId: string }) {
         </div>
 
         <textarea
-          className="w-full border border-border rounded-xl p-3 text-[16px] bg-surface text-foreground placeholder:text-muted resize-none focus:outline-none transition-colors"
+          className="w-full px-4 pt-[6px] pb-2 font-hand text-[22px] leading-[30px] text-[#2F3A56] placeholder:text-[#B0A596] resize-none focus:outline-none shadow-[0_2px_5px_rgba(60,40,20,0.1)] border-l-[3px] border-l-[rgba(214,120,120,0.45)]"
+          style={{ background: "repeating-linear-gradient(#FFFDF8 0 29px, rgba(120,160,200,0.3) 29px 30px)" }}
           onFocus={(e) => { e.currentTarget.style.borderColor = color; }}
           onBlur={(e) => { e.currentTarget.style.borderColor = ""; }}
           rows={3}

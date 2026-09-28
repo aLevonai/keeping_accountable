@@ -124,7 +124,7 @@ export default function OnboardPage() {
   }
 
   const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-background">
+    <div className="paper-bg min-h-screen flex flex-col items-center justify-center px-7 pb-12">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">{children}</div>
     </div>
   );

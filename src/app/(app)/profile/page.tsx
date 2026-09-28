@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Share2 } from "lucide-react";
+import { differenceInCalendarDays, format } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { useAppData } from "@/contexts/app-data";
 import { useSignOut } from "@/hooks/use-auth";
@@ -12,16 +13,37 @@ import { qk, fetchActiveInvite, type CoupleData } from "@/lib/queries";
 import { generateInviteCode, inviteExpiry, shareInvite } from "@/utils/invite";
 import { compressImage } from "@/utils/image";
 import { getSignedPhotoUrl, thumbPath } from "@/utils/storage";
-import { Avatar, Toggle, PageTitle } from "@/components/ui/bits";
+import { Toggle, firstName, getInitial } from "@/components/ui/bits";
+import { useDreams } from "@/hooks/use-dreams";
+import { PaperPage, PaperHeader, NotebookCard, Tape, InkStamp, tornBottom } from "@/components/ui/paper";
+import { seeded } from "@/utils/seeded";
 import { confirmSheet, toast } from "@/components/ui/feedback";
 
-function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+// A photo-booth square for the passport, taped at a corner.
+function PassportPhoto({ name, who, tilt }: { name: string | null; who: "self" | "partner"; tilt: number }) {
+  const tint = who === "self" ? "var(--primary)" : "var(--partner-accent)";
+  return (
+    <div className="relative" style={{ transform: `rotate(${tilt}deg)` }}>
+      <div className="bg-white p-[5px] pb-[18px] shadow-[0_2px_5px_rgba(60,40,20,0.18)]">
+        <div
+          className="w-[86px] h-[86px] flex items-center justify-center"
+          style={
+            name
+              ? { background: `linear-gradient(160deg, color-mix(in srgb, ${tint} 18%, white), color-mix(in srgb, ${tint} 34%, white))` }
+              : { background: "repeating-linear-gradient(45deg, #F2EDE8 0 6px, #EAE3DB 6px 12px)" }
+          }
+        >
+          <span
+            className="font-[family-name:var(--font-instrument-serif)] italic text-[44px] leading-none"
+            style={{ color: name ? tint : "#B8AFA7" }}
+          >
+            {name ? getInitial(name) : "?"}
+          </span>
+        </div>
+      </div>
+      <Tape r={seeded(`passport-${who}`)} style={{ top: -7, left: -12, transform: "rotate(-35deg)", width: 40 }} />
+    </div>
+  );
 }
 
 const BACKFILL_KEY = "thumbs_backfilled";
@@ -34,7 +56,8 @@ export default function ProfilePage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const signOut = useSignOut();
-  const { user, couple, partner, self } = useAppData();
+  const { user, couple, partner, self, goals } = useAppData();
+  const { dreams } = useDreams(couple?.id);
   const push = usePush();
   const supabase = createClient();
 
@@ -135,119 +158,140 @@ export default function ProfilePage() {
   }
 
   const selfName = self?.display_name ?? "You";
-  const partnerName = partner?.display_name ?? "Partner";
+  const partnerName = partner?.display_name ?? null;
   const backfilling = backfillProgress !== null;
+  const since = couple ? new Date(couple.created_at) : null;
+  const checkIns = goals.reduce((n, g) => n + g.completions.length, 0);
+  const dreamsDone = dreams.filter((d) => d.achieved_at !== null).length;
+  const days = since ? Math.max(1, differenceInCalendarDays(new Date(), since)) : 0;
 
   return (
-    <div className="px-5 pt-14 pb-8 min-h-screen bg-background">
-      <PageTitle className="mb-6">Profile</PageTitle>
+    <PaperPage>
+      <PaperHeader title="Profile" subtitle="the two of us" />
 
-      <div className="flex flex-col items-center gap-2 mb-6">
-        <div className="w-[72px] h-[72px] rounded-full bg-primary-light flex items-center justify-center">
-          <span className="text-[24px] font-semibold text-primary">{getInitials(selfName)}</span>
-        </div>
-        <p className="text-[17px] font-semibold text-foreground">{selfName}</p>
-        <p className="text-[13px] text-muted">{user?.email}</p>
-      </div>
+      {/* Passport */}
+      <section className="relative mx-5 mt-6">
+        <div
+          className="relative bg-[#FFFDF8] px-4 pt-3 pb-5 shadow-[0_2px_6px_rgba(60,40,20,0.14),0_18px_28px_-18px_rgba(60,40,20,0.4)]"
+          style={{ transform: "rotate(-0.6deg)" }}
+        >
+          <div className="flex items-center justify-between border-b border-dashed border-[rgba(138,115,94,0.35)] pb-2">
+            <span className="font-mono text-[9px] font-bold tracking-[0.22em] uppercase text-primary">CheckMate · couple pass</span>
+            <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-muted">No. {couple?.id.slice(0, 6).toUpperCase() ?? "——"}</span>
+          </div>
 
-      <div className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-        {partner ? (
-          <div className="px-4 py-3.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted mb-1">Partner</p>
-            <div className="flex items-center gap-2.5">
-              <Avatar name={partnerName} who="partner" size={40} />
-              <div>
-                <p className="text-[15px] font-medium text-foreground">{partnerName}</p>
-                <p className="text-[12px] text-success">Connected</p>
-              </div>
+          <div className="flex items-start justify-center gap-4 mt-5">
+            <div className="flex flex-col items-center">
+              <PassportPhoto name={selfName} who="self" tilt={-3} />
+              <p className="font-hand text-[22px] leading-none text-[#3B332C] mt-3" dir="auto">{firstName(selfName, "You")}</p>
+              <p className="font-mono text-[8px] tracking-[0.18em] uppercase text-muted mt-1">you</p>
+            </div>
+            <span className="font-[family-name:var(--font-instrument-serif)] italic text-[34px] text-primary mt-9">&amp;</span>
+            <div className="flex flex-col items-center">
+              <PassportPhoto name={partnerName} who="partner" tilt={2.5} />
+              <p className="font-hand text-[22px] leading-none text-[#3B332C] mt-3" dir="auto">
+                {partnerName ? firstName(partnerName, "Partner") : "waiting…"}
+              </p>
+              <p className="font-mono text-[8px] tracking-[0.18em] uppercase text-muted mt-1">partner</p>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="px-4 py-3.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted mb-2">Partner</p>
-              <p className="text-[14px] text-muted">Your partner hasn&apos;t joined yet. Send them your invite link.</p>
+
+          {since && (
+            <p className="font-hand text-[20px] text-center text-[#6E6053] mt-4">
+              together on CheckMate since {format(since, "MMMM d, yyyy")}
+            </p>
+          )}
+
+          <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
+            <InkStamp color="var(--primary)" rotate={-6}>{checkIns} check-ins</InkStamp>
+            <InkStamp color="var(--success)" rotate={3}>{dreamsDone} dreams come true</InkStamp>
+            <InkStamp color="var(--partner-accent)" rotate={-2}>{days} days</InkStamp>
+          </div>
+
+          <p className="font-mono text-[9px] tracking-[0.12em] text-muted text-center mt-4 truncate">{user?.email}</p>
+        </div>
+      </section>
+
+      {/* Invite ticket (until the partner joins) */}
+      {!partner && (
+        <section className="mx-6 mt-8">
+          <div className="relative flex bg-[#FFF1B8] shadow-[0_2px_5px_rgba(60,40,20,0.14)] rotate-1">
+            <div className="flex-1 px-4 py-3.5 border-r-2 border-dashed border-[rgba(138,115,94,0.45)]">
+              <p className="font-mono text-[9px] tracking-[0.18em] uppercase text-[#8A735E]">Admit one · your partner</p>
+              <p className="font-mono text-[20px] font-bold tracking-[0.1em] text-[#3B332C] mt-1">{inviteCode ?? "———"}</p>
+              <button
+                onClick={handleRegenerateCode}
+                disabled={regenerating}
+                className="font-hand text-[17px] text-[#8A735E] mt-1 disabled:opacity-40"
+              >
+                {regenerating ? "printing a new one…" : inviteCode ? "get a new code" : "create an invite code"}
+              </button>
             </div>
-            {inviteCode && (
-              <>
-                <div className="h-px bg-border" />
-                <div className="px-4 py-3.5 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted mb-1">Invite code</p>
-                    <p className="text-[18px] font-semibold tracking-[0.12em] text-foreground">{inviteCode}</p>
-                  </div>
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center gap-1.5 bg-primary text-white text-[13px] font-semibold rounded-full px-3.5 py-2 active:scale-95 transition-transform"
-                  >
-                    <Share2 size={14} />
-                    Share
+            <button
+              onClick={handleShare}
+              disabled={!inviteCode}
+              className="w-[92px] flex flex-col items-center justify-center gap-1 text-primary disabled:opacity-40 active:bg-black/5"
+            >
+              <Share2 size={20} />
+              <span className="font-hand text-[18px] leading-none">send</span>
+            </button>
+            {/* Ticket notches */}
+            <span aria-hidden className="absolute -top-2 right-[84px] w-4 h-4 rounded-full paper-bg" />
+            <span aria-hidden className="absolute -bottom-2 right-[84px] w-4 h-4 rounded-full paper-bg" />
+          </div>
+        </section>
+      )}
+
+      {/* Settings on notebook paper */}
+      <section className="mx-4 mt-9">
+        <NotebookCard tilt={0.5}>
+          <div aria-hidden className="absolute top-0 bottom-0 left-[40px] w-px bg-[rgba(214,120,120,0.5)]" />
+          <p className="font-hand text-[26px] leading-none text-[#3B332C] pl-[52px] pt-4 pb-3">settings</p>
+
+          <div className="border-t border-[rgba(120,160,200,0.32)] pl-[52px]">
+            {editingName ? (
+              <form onSubmit={handleSaveName} className="pr-4 py-3">
+                <label htmlFor="display-name" className="block font-mono text-[9px] tracking-[0.16em] uppercase text-muted mb-1.5">Display name</label>
+                <div className="flex gap-2">
+                  <input
+                    id="display-name"
+                    className="flex-1 min-w-0 border border-border rounded-xl px-3 py-2 text-[16px] bg-surface text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    dir="auto"
+                    autoFocus
+                  />
+                  <button type="submit" disabled={!displayName.trim()} className="px-3 py-2 bg-primary text-white text-[13px] font-medium rounded-xl disabled:opacity-40">
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setEditingName(false)} className="px-2 py-2 text-muted text-[13px]">
+                    Cancel
                   </button>
                 </div>
-              </>
+              </form>
+            ) : (
+              <button
+                onClick={() => { setDisplayName(self?.display_name ?? ""); setEditingName(true); }}
+                className="w-full flex items-center justify-between pr-4 min-h-[54px] active:bg-black/[0.03] text-left"
+              >
+                <div>
+                  <p className="text-[15px] text-foreground">Display name</p>
+                  <p className="font-hand text-[17px] leading-none text-[#8A7B6E]" dir="auto">{selfName}</p>
+                </div>
+                <ChevronRight size={16} className="text-muted" />
+              </button>
             )}
-            <div className="h-px bg-border" />
-            <button
-              onClick={handleRegenerateCode}
-              disabled={regenerating}
-              className="w-full px-4 py-3 text-[14px] text-muted text-left disabled:opacity-40"
-            >
-              {regenerating ? "Generating…" : inviteCode ? "Get a new code" : "Create an invite code"}
-            </button>
-          </>
-        )}
-      </div>
+          </div>
 
-      <div className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-        {editingName ? (
-          <form onSubmit={handleSaveName} className="px-4 py-3.5">
-            <label htmlFor="display-name" className="block text-[13px] font-medium text-foreground mb-2">Display name</label>
-            <div className="flex gap-2">
-              <input
-                id="display-name"
-                className="flex-1 min-w-0 border border-border rounded-xl px-3 py-2 text-[16px] bg-surface text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                dir="auto"
-                autoFocus
-              />
-              <button
-                type="submit"
-                disabled={!displayName.trim()}
-                className="px-3 py-2 bg-primary text-white text-[13px] font-medium rounded-xl disabled:opacity-40"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingName(false)}
-                className="px-3 py-2 border border-border text-muted text-[13px] rounded-xl"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button
-            onClick={() => { setDisplayName(self?.display_name ?? ""); setEditingName(true); }}
-            className="w-full flex items-center justify-between px-4 py-3.5 active:bg-surface-alt transition-colors"
-          >
-            <span className="text-[15px] text-foreground">Edit display name</span>
-            <ChevronRight size={16} className="text-muted" />
-          </button>
-        )}
-
-        {push.supported && (
-          <>
-            <div className="h-px bg-border" />
-            <div className="flex items-center justify-between px-4 py-3.5">
-              <div className="flex-1 min-w-0 pr-3">
+          {push.supported && (
+            <div className="border-t border-[rgba(120,160,200,0.32)] pl-[52px] pr-4 min-h-[58px] flex items-center justify-between gap-3">
+              <div className="min-w-0 py-2">
                 <p className="text-[15px] text-foreground">Notifications</p>
                 {push.permissionDenied ? (
                   <p className="text-[11px] text-[#B83A26] mt-0.5">Blocked. Allow notifications in your settings.</p>
                 ) : (
-                  <p className="text-[11px] text-muted mt-0.5">
-                    {push.subscribed ? "On for this device" : "Get notified when your partner checks in"}
+                  <p className="font-hand text-[17px] leading-none text-[#8A7B6E]">
+                    {push.subscribed ? "on for this device" : "hear when your partner checks in"}
                   </p>
                 )}
               </div>
@@ -260,52 +304,46 @@ export default function ProfilePage() {
                 />
               )}
             </div>
-          </>
-        )}
-      </div>
+          )}
 
-      {!storedBackfillDone && !backfillDone && (
-        <div className="bg-surface rounded-2xl border border-border mb-4 overflow-hidden">
-          <div className="px-4 py-3.5 flex items-center justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] text-foreground">Speed up journal photos</p>
-              <p className="text-[11px] text-muted mt-0.5">
-                {backfillProgress
-                  ? `${backfillProgress.done} / ${backfillProgress.total} processed…`
-                  : "Generate thumbnails for older photos"}
-              </p>
+          {!storedBackfillDone && !backfillDone && (
+            <div className="border-t border-[rgba(120,160,200,0.32)] pl-[52px] pr-4 min-h-[58px] flex items-center justify-between gap-3">
+              <div className="min-w-0 py-2">
+                <p className="text-[15px] text-foreground">Speed up journal photos</p>
+                <p className="font-hand text-[17px] leading-none text-[#8A7B6E]">
+                  {backfillProgress ? `${backfillProgress.done} / ${backfillProgress.total} processed…` : "thumbnails for older photos"}
+                </p>
+              </div>
+              <button
+                onClick={handleBackfill}
+                disabled={backfilling}
+                className="flex-shrink-0 px-3 py-1.5 bg-primary-light text-primary text-[12px] font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition-transform"
+              >
+                {backfilling ? "Running…" : "Run"}
+              </button>
             </div>
-            <button
-              onClick={handleBackfill}
-              disabled={backfilling}
-              className="flex-shrink-0 px-3 py-1.5 bg-primary-light text-primary text-[12px] font-semibold rounded-lg disabled:opacity-50 active:scale-95 transition-transform"
-            >
-              {backfilling ? "Running…" : "Run"}
-            </button>
-          </div>
-        </div>
-      )}
+          )}
+          <div className="h-2" />
+        </NotebookCard>
+      </section>
 
-      <div className="bg-surface rounded-2xl border border-border overflow-hidden mb-4">
-        {couple && (
-          <>
+      {/* Account slip */}
+      <section className="mx-8 mt-9" style={{ filter: "drop-shadow(0 2px 3px rgba(60,40,20,0.12))" }}>
+        <div className="bg-[#FFFDF8] px-4 pt-2 pb-5" style={{ clipPath: tornBottom("account-slip", 18), transform: "rotate(-1deg)" }}>
+          {couple && (
             <button
               onClick={handleLeaveCouple}
               disabled={leaving}
-              className="w-full px-4 py-3.5 text-[15px] text-[#B83A26] text-left disabled:opacity-40 active:bg-surface-alt transition-colors"
+              className="w-full py-3 text-[15px] text-[#B83A26] text-left disabled:opacity-40 border-b border-dashed border-[rgba(138,115,94,0.3)]"
             >
               {leaving ? "Leaving…" : "Leave couple"}
             </button>
-            <div className="h-px bg-border" />
-          </>
-        )}
-        <button
-          onClick={() => void signOut()}
-          className="w-full px-4 py-3.5 text-[15px] text-[#B83A26] text-left active:bg-surface-alt transition-colors"
-        >
-          Sign out
-        </button>
-      </div>
-    </div>
+          )}
+          <button onClick={() => void signOut()} className="w-full py-3 text-[15px] text-[#B83A26] text-left">
+            Sign out
+          </button>
+        </div>
+      </section>
+    </PaperPage>
   );
 }

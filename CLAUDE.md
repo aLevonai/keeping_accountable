@@ -34,7 +34,7 @@ The app uses the **Linen / CheckMate** design system:
 - **Goal color chips**: each goal has a `color` field (hex string). UI uses 11×11px rounded squares (not emoji) as the visual anchor
 - **Dots**: filled/empty circles showing progress (max 8 dots, then `count/target` text) — `components/ui/bits.tsx`
 - **Section dividers**: `10px bold uppercase muted` label + count badge + horizontal rule — `SectionDivider` in `bits.tsx`
-- **Home + Journal** share the scrapbook materials in `components/ui/paper.tsx` (washi tape, clips) and `components/home/paper-bits.tsx` (tally marks, hand-drawn checkbox, torn edge)
+- **Every screen is part of the scrapbook**: the `(app)` layout and auth pages sit on `.paper-bg`. Shared materials live in `components/ui/paper.tsx` — `PaperPage`/`PaperHeader`/`HandHeading`, washi `Tape`/`Tapes`, `Pin`, `PaperClip`, `Tally`, `HandCheckbox`, `Punches` (punched-hole progress), `InkStamp`, `PostageStamp`, `Postmark`, `NotebookCard`, `tornBottom()`, `Squiggle`. Reuse these rather than inventing new card styles
 - **Journal**: scrapbook on paper texture — polaroids, label-maker prints, index cards, sticky notes, ink stamps, washi tape; every entry gets a stable pseudo-random tilt/tape/variant from its id (`utils/seeded.ts`). Achieved dreams render as full-width "Dream achieved" spreads
 - No emoji in UI chrome; no `alert()`/`confirm()` — use `toast()` / `confirmSheet()`
 
@@ -46,14 +46,14 @@ The app uses the **Linen / CheckMate** design system:
 | `/onboard` | Set display name, then create a couple (share invite link) or join one (code prefilled from a `/join` link) |
 | `/join/[code]` | Public invite link — remembers the code, routes through sign-in to the join step |
 | `/home` | Scrapbook front page: greeting, torn-paper "this week" card with tally marks, goal list on a notebook page (tap + to check in, hold + to log instantly), latest journal polaroid + partner's-week sticky note, dreams as luggage tags |
-| `/goals` | Sections Yours / Together / [Partner's] / Done ✓ — color chip, cadence, Dots, streak |
+| `/goals` | Handwritten sections (yours / together / partner's / done for now); each goal is a taped (or pinned, for the partner's) index card with punched-hole progress, streak ink stamp, and a DONE stamp |
 | `/goals/new`, `/goals/[id]/edit` | Goal form (`components/goal-form.tsx`): title, cadence, target, shared + joint/separate, personal reminder |
-| `/goals/[id]` | Goal detail: progress + streak calendar, check-in / nudge, history grouped by period, per-check-in actions sheet |
-| `/check-in/[goalId]` | Log a check-in: optional photo + note, backdate up to 7 days; success screen shows progress then returns |
-| `/dreams` | Bucket list: Active / Achieved. Achieving opens a sheet for a photo + note → journal spread + confetti |
+| `/goals/[id]` | Goal detail: progress + streak calendar on a notebook card, check-in / nudge, history as polaroids and lined notes grouped by period, per-check-in actions sheet |
+| `/check-in/[goalId]` | Log a check-in: empty polaroid to fill, note written on lined paper, backdate up to 7 days; success screen shows progress then returns |
+| `/dreams` | Postcards with a postage stamp per owner, under folder tabs (someday / came true). "We did it" opens a sheet for a photo + note → journal spread + confetti; achieved postcards get a postmark |
 | `/dreams/new`, `/dreams/[id]/edit` | Dream form (`components/dream-form.tsx`) |
 | `/journal` | Scrapbook of check-ins + achieved dreams, grouped by month, person filter, infinite scroll, full-screen swipeable lightbox (`?open=<completionId>`, `?dream=<id>`) |
-| `/profile` | Display name, partner / invite sharing, push toggle (per device), sign out |
+| `/profile` | Couple "passport" (both of you, together-since date, stats as ink stamps), invite as a ticket stub, settings on notebook paper, account slip |
 
 ## Key files
 
@@ -82,6 +82,7 @@ src/
 │   ├── ui/sheet.tsx            # Bottom sheet
 │   ├── ui/photo.tsx            # Private photo <img> (thumb → full fallback, re-sign on error)
 │   ├── ui/celebrate.tsx        # Confetti burst
+│   ├── ui/paper.tsx            # Scrapbook materials shared by every page (see Design)
 │   ├── check-in-button.tsx     # "+" — tap to check in, hold to quick-log with Undo
 │   ├── journal/scrapbook.tsx   # Journal layout + card variants + dream spread
 │   └── journal/lightbox.tsx    # Full-screen viewer

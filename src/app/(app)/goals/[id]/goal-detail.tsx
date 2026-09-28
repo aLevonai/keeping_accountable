@@ -15,6 +15,8 @@ import type { Cadence, CompletionWithMedia } from "@/types/database";
 import { GoalDetailSkeleton } from "@/components/ui/page-skeleton";
 import { Avatar, BackButton, firstName } from "@/components/ui/bits";
 import { Photo } from "@/components/ui/photo";
+import { NotebookCard, Tape, Tapes, HandHeading } from "@/components/ui/paper";
+import { seeded, between } from "@/utils/seeded";
 import { Sheet } from "@/components/ui/sheet";
 import { confirmSheet, toast } from "@/components/ui/feedback";
 
@@ -131,25 +133,37 @@ function HistoryCard({
 }) {
   const media = c.completion_media?.[0];
   const uploading = useIsUploading(c.id);
-  const aspect = media?.width && media?.height ? `${media.width} / ${media.height}` : "16 / 9";
+  const aspect = media?.width && media?.height ? `${media.width} / ${media.height}` : "4 / 3";
+  const r = seeded(c.id + ":history");
 
   return (
-    <div className="bg-surface rounded-2xl border border-border overflow-hidden">
+    <div
+      className={`relative ${media || uploading ? "bg-white p-2 pb-1" : "bg-[#FFFDF8]"} shadow-[0_2px_5px_rgba(60,40,20,0.12),0_10px_18px_-12px_rgba(60,40,20,0.3)]`}
+      style={{
+        transform: `rotate(${between(r, -1.4, 1.4)}deg)`,
+        ...(media || uploading ? {} : { backgroundImage: "repeating-linear-gradient(#FFFDF8 0 23px, rgba(120,160,200,0.25) 23px 24px)" }),
+      }}
+    >
       {media ? (
-        <div className="relative bg-surface-alt max-h-[420px] overflow-hidden" style={{ aspectRatio: aspect }}>
-          <Photo path={media.storage_path} alt="Check-in photo" className="w-full h-full object-cover" />
-        </div>
+        <>
+          <Tapes r={r} />
+          <div className="relative bg-[#EDE6DD] max-h-[420px] overflow-hidden" style={{ aspectRatio: aspect }}>
+            <Photo path={media.storage_path} alt="Check-in photo" className="w-full h-full object-cover" />
+          </div>
+        </>
       ) : uploading ? (
-        <div className="py-3 text-center text-[12px] text-muted border-b border-border">Saving photo…</div>
+        <div className="py-6 text-center font-hand text-[18px] text-muted bg-gradient-to-br from-[#E7E1DA] to-[#CFC6BC] animate-pulse">developing…</div>
       ) : null}
-      <div className="px-3 py-2.5 flex items-center gap-2">
+      <div className="px-2 py-2 flex items-center gap-2">
         {showAuthor && (
           <Avatar name={isOwn ? selfName : partnerName} who={isOwn ? "self" : "partner"} color={chipColor} />
         )}
-        {c.note && (
-          <p className="text-[13px] text-foreground flex-1 min-w-0" dir="auto">{c.note}</p>
+        {c.note ? (
+          <p className="font-hand text-[18px] leading-tight text-[#3B332C] flex-1 min-w-0" dir="auto">{c.note}</p>
+        ) : (
+          <p className="font-hand text-[17px] leading-tight text-[#8A7B6E] flex-1 min-w-0">checked in</p>
         )}
-        <p className="text-[11px] text-muted ml-auto flex-shrink-0">{format(new Date(c.completed_at), "MMM d, h:mm a")}</p>
+        <p className="font-mono text-[9px] tracking-[0.1em] uppercase text-muted flex-shrink-0">{format(new Date(c.completed_at), "EEE d MMM · HH:mm")}</p>
         {isOwn && (
           <button
             onClick={onActions}
@@ -260,30 +274,31 @@ export function GoalDetail({ id }: { id: string }) {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="paper-bg flex flex-col min-h-screen pb-40 -mb-24">
       <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoPicked} />
 
-      <div className="px-5 pt-14 pb-4 bg-surface border-b border-border">
+      <div className="px-5 pt-14 pb-2">
         <div className="flex items-center justify-between mb-4">
           <BackButton fallback="/goals" className="" />
           {isOwnerOrShared && (
             <Link
               href={`/goals/${goal.id}/edit`}
               aria-label="Edit goal"
-              className="w-9 h-9 flex items-center justify-center rounded-full border border-border bg-surface active:scale-95 transition-transform"
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-[#FFFDF8] shadow-[0_1px_3px_rgba(60,40,20,0.15)] active:scale-95 transition-transform"
             >
               <Pencil size={15} className="text-muted" />
             </Link>
           )}
         </div>
 
-        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{ownerLabel} · {goal.cadence}</p>
-        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[24px] text-foreground leading-tight mt-1">
+        <p className="font-mono text-[9px] tracking-[0.18em] uppercase text-muted">{ownerLabel} · {goal.cadence}</p>
+        <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] text-foreground leading-[1.05] mt-1" dir="auto">
           {goal.title}
         </h1>
 
         {goal.cadence !== "once" && (
-          <div className="mt-4 bg-surface-alt rounded-2xl px-4 py-3">
+          <NotebookCard className="mt-5 px-4 pt-4 pb-4" tilt={-0.6}>
+            <Tape r={seeded(goal.id + ":progress")} style={{ top: -9, left: "50%", transform: "translateX(-50%) rotate(-2deg)", width: 64 }} />
             <ProgressBar
               label={p.mode === "separate" ? "You · " : ""}
               count={p.mode === "separate" ? p.myCount : p.total}
@@ -330,11 +345,11 @@ export function GoalDetail({ id }: { id: string }) {
                 color={p.done ? "var(--success)" : chipColor}
               />
             )}
-          </div>
+          </NotebookCard>
         )}
       </div>
 
-      <div className="px-5 py-4 border-b border-border flex flex-col gap-2">
+      <div className="px-5 py-5 flex flex-col gap-2">
         {isOwnerOrShared && (
           <Link
             href={`/check-in/${goal.id}`}
@@ -349,36 +364,35 @@ export function GoalDetail({ id }: { id: string }) {
           <button
             onClick={handleNudge}
             disabled={nudgeSent}
-            className="flex items-center justify-center gap-2 w-full border border-border text-muted font-medium py-3 rounded-2xl active:scale-[0.98] transition-all disabled:opacity-60 text-[14px]"
+            className="flex items-center justify-center gap-2 w-full bg-[#DCE8F2] text-[#2F4A5E] py-3 rounded-2xl shadow-[0_1px_3px_rgba(40,60,80,0.15)] active:scale-[0.98] transition-all disabled:opacity-60"
           >
-            {nudgeSent ? "Nudge sent" : `Nudge ${partnerFirst}`}
+            <span className="font-hand text-[20px] leading-none">{nudgeSent ? "nudge sent ✓" : `nudge ${partnerFirst}`}</span>
           </button>
         )}
       </div>
 
-      <div className="flex flex-col px-5 py-4 gap-1 pb-8">
-        <h2 className="text-[11px] font-bold tracking-[0.1em] uppercase text-muted mb-2">History</h2>
+      <div className="flex flex-col px-5 py-2 gap-1 pb-8">
+        <HandHeading className="mt-3 mb-4 -mx-6">history</HandHeading>
 
         {history.isPending && goal.completions.length > 0 ? (
           <div className="flex flex-col gap-2.5">
             {goal.completions.slice(-3).map((c) => (
-              <div key={c.id} className="h-12 rounded-2xl bg-surface border border-border animate-pulse" />
+              <div key={c.id} className="h-12 bg-[#FFFDF8] shadow-sm animate-pulse" />
             ))}
           </div>
         ) : periodGroups.length === 0 ? (
-          <p className="text-muted text-sm text-center py-6">No check-ins yet. Be the first!</p>
+          <p className="font-hand text-[21px] text-muted text-center py-6">No check-ins yet. Be the first!</p>
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
             {periodGroups.map((group) => (
               <div key={group.key}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-muted whitespace-nowrap">{group.label}</span>
-                  <span className="text-[9px] font-semibold text-muted bg-border rounded-full px-1.5 py-px">
+                <div className="flex items-baseline gap-2 mb-3">
+                  <span className="font-hand text-[21px] leading-none text-[#3B332C]">{group.label}</span>
+                  <span className="font-mono text-[9px] tracking-[0.14em] text-muted">
                     {group.items.length}/{p.target}
                   </span>
-                  <div className="flex-1 h-px bg-border" />
                 </div>
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-4">
                   {group.items.map((c) => (
                     <HistoryCard
                       key={c.id}

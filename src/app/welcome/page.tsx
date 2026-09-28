@@ -102,14 +102,14 @@ export default function WelcomePage() {
 
   if (restoring) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+      <div className="paper-bg min-h-screen flex flex-col items-center justify-center">
         <div className="animate-pulse"><AppLogo size={48} /></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-7 pb-12 bg-background">
+    <div className="paper-bg min-h-screen flex flex-col items-center justify-center px-7 pb-12">
       <div className="w-full max-w-sm flex flex-col items-center">
         {/* Logo lockup */}
         <div className="flex flex-col items-center gap-3 mb-12">
@@ -117,7 +117,7 @@ export default function WelcomePage() {
           <h1 className="font-[family-name:var(--font-instrument-serif)] italic text-[32px] text-foreground leading-none">
             CheckMate
 </h1>
-          <p className="text-[14px] text-muted text-center leading-relaxed">
+          <p className="font-hand text-[22px] text-muted text-center leading-tight">
             Set goals, prove them,<br />build memories — together.
           </p>
         </div>
